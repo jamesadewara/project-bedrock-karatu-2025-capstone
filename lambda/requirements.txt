@@ -1,0 +1,3 @@
+# Lambda function dependencies (if any)
+# For this simple function, boto3 is included in AWS Lambda runtime
+# No additional packages required

@@ -1,0 +1,111 @@
+# ============================================================
+# VARIABLES - Project Bedrock
+# ============================================================
+
+variable "region" {
+  description = "AWS Region"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "cluster_name" {
+  description = "EKS Cluster Name"
+  type        = string
+  default     = "project-bedrock-cluster"
+}
+
+variable "vpc_name" {
+  description = "VPC Name Tag"
+  type        = string
+  default     = "project-bedrock-vpc"
+}
+
+variable "app_namespace" {
+  description = "Kubernetes Application Namespace"
+  type        = string
+  default     = "retail-app"
+}
+
+variable "iam_user_dev" {
+  description = "Developer IAM User Name"
+  type        = string
+  default     = "bedrock-dev-view"
+}
+
+variable "s3_bucket_name" {
+  description = "S3 Assets Bucket Name"
+  type        = string
+  default     = "bedrock-assets-alt-soe-025-3359"
+}
+
+variable "lambda_function_name" {
+  description = "Lambda Function Name"
+  type        = string
+  default     = "bedrock-asset-processor"
+}
+
+variable "project_tag" {
+  description = "Project Tag Value"
+  type        = string
+  default     = "karatu-2025-capstone"
+}
+
+variable "eks_version" {
+  description = "EKS Kubernetes Version"
+  type        = string
+  default     = "1.34"
+}
+
+variable "db_username" {
+  description = "RDS Master Username"
+  type        = string
+  default     = "admin"
+  sensitive   = true
+}
+
+variable "db_name_catalog" {
+  description = "Catalog Database Name"
+  type        = string
+  default     = "catalogdb"
+}
+
+variable "db_name_orders" {
+  description = "Orders Database Name"
+  type        = string
+  default     = "ordersdb"
+}
+
+variable "availability_zones" {
+  description = "Availability Zones"
+  type        = list(string)
+  default     = ["us-east-1a", "us-east-1b"]
+}
+
+# ============================================================
+# NAMECHEAP DOMAIN VARIABLE
+# ============================================================
+# Replace with your actual Namecheap domain
+# Example: "mydomain.com" or "store.mydomain.com"
+variable "domain_name" {
+  description = "Your Namecheap domain name for the retail store"
+  type        = string
+  default     = "spatialdesign3d.site" # Change to your Namecheap domain
+}
+
+variable "vpc_cidr" {
+  description = "VPC CIDR block"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "public_subnet_cidrs" {
+  description = "Public Subnet CIDRs"
+  type        = list(string)
+  default     = ["10.0.0.0/24", "10.0.1.0/24"]
+}
+
+variable "private_subnet_cidrs" {
+  description = "Private Subnet CIDRs"
+  type        = list(string)
+  default     = ["10.0.10.0/24", "10.0.11.0/24"]
+}
