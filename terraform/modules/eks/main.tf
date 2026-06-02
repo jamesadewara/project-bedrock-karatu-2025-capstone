@@ -341,6 +341,26 @@ resource "kubernetes_namespace" "app" {
   depends_on = [aws_eks_node_group.main]
 }
 
+# AWS-AUTH ConfigMap - Map IAM User to K8s RBAC
+resource "kubernetes_config_map_v1_data" "aws_auth" {
+  metadata {
+    name      = "aws-auth"
+    namespace = "kube-system"
+  }
+
+  data = {
+    mapUsers = yamlencode([{
+      userarn  = var.dev_user_arn
+      username = "bedrock-dev-view"
+      groups   = ["view"]
+    }])
+  }
+
+  force = true
+
+  depends_on = [aws_eks_node_group.main]
+}
+
 # Outputs
 output "cluster_endpoint" {
   value = aws_eks_cluster.main.endpoint

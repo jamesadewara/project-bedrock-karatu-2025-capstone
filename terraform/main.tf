@@ -48,22 +48,6 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-resource "random_string" "catalog_db_master" {
-  length  = 16
-  special = true
-  upper   = true
-  lower   = true
-  numeric = true
-}
-
-resource "random_string" "orders_db_master" {
-  length  = 16
-  special = true
-  upper   = true
-  lower   = true
-  numeric = true
-}
-
 resource "random_string" "db_password" {
   length  = 16
   special = false
@@ -101,6 +85,7 @@ module "eks" {
   public_subnet_ids  = module.vpc.public_subnet_ids
   app_namespace      = var.app_namespace
   common_tags        = { Project = var.project_tag }
+  dev_user_arn       = aws_iam_user.dev_view.arn
 }
 
 # ============================================================
@@ -116,8 +101,8 @@ module "rds" {
   eks_cluster_name      = var.cluster_name
   db_username           = var.db_username
   db_password           = random_string.db_password.result
-  db_name_catalog       = random_string.catalog_db_master.result
-  db_name_orders        = random_string.orders_db_master.result
+  db_name_catalog       = var.db_name_catalog
+  db_name_orders        = var.db_name_orders
   common_tags           = { Project = var.project_tag }
 
   depends_on = [module.vpc, module.eks]
@@ -430,28 +415,8 @@ resource "aws_iam_user_policy" "dev_s3_put" {
   })
 }
 
-# ============================================================
-# EKS AWS-AUTH CONFIGMAP - Map IAM User to K8s RBAC
-# ============================================================
-
-resource "kubernetes_config_map_v1_data" "aws_auth" {
-  metadata {
-    name      = "aws-auth"
-    namespace = "kube-system"
-  }
-
-  data = {
-    mapUsers = yamlencode([{
-      userarn  = aws_iam_user.dev_view.arn
-      username = "bedrock-dev-view"
-      groups   = ["view"]
-    }])
-  }
-
-  force = true
-
-  depends_on = [module.eks]
-}
+# AWS-AUTH ConfigMap is managed inside the EKS module (modules/eks/main.tf)
+# dev_user_arn is passed via the module "eks" block above
 
 # ============================================================
 # CLOUDWATCH - Control Plane Logging (Enabled in EKS Module)

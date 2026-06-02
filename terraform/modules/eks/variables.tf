@@ -37,5 +37,10 @@ variable "common_tags" {
 variable "aws_eks_node_group_instance_types" {
   description = "EKS Node Group Instance Types"
   type        = list(string)
-  default     = ["t3.small"] # t2.micro 
+  default     = ["t2.micro"]
+}
+
+variable "dev_user_arn" {
+  description = "IAM ARN of the developer user to map in aws-auth"
+  type        = string
 }

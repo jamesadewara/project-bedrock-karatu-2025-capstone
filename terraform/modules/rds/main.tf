@@ -122,7 +122,7 @@ resource "aws_db_instance" "orders" {
   identifier = "${var.eks_cluster_name}-orders"
 
   engine         = "postgres"
-  engine_version = "16.1"
+  engine_version = "16.3"
   instance_class = var.aws_db_instance_orders_instance_class  # FREE TIER ELIGIBLE
 
   allocated_storage     = 20
