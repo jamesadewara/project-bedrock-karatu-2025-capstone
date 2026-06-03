@@ -325,21 +325,19 @@ resource "aws_iam_role_policy" "alb_controller" {
 # NOTE: Deployment is via kubectl manifests in k8s/aws-load-balancer-controller/ (kubectl-only approach)
 # The IAM role above provides IRSA permissions for the controller pods
 
-# CloudWatch Observability Add-on for Container Logging
-resource "aws_eks_addon" "cloudwatch_observability" {
-  cluster_name             = aws_eks_cluster.main.name
-  addon_name               = "amazon-cloudwatch-observability"
-  service_account_role_arn = aws_iam_role.cloudwatch_observability.arn
-  preserve                 = false
-
-  depends_on = [aws_eks_node_group.main]
+# CloudWatch Log Group for container logs (lightweight FluentBit)
+resource "aws_cloudwatch_log_group" "container_logs" {
+  name              = "/aws/eks/${var.cluster_name}/containers"
+  retention_in_days = 3
 
   tags = var.common_tags
+
+  depends_on = [aws_eks_cluster.main]
 }
 
-# IAM Role for CloudWatch Observability Add-on (IRSA)
-resource "aws_iam_role" "cloudwatch_observability" {
-  name = "${var.cluster_name}-cloudwatch-observability-role"
+# IAM Role for aws-fluent-bit (IRSA)
+resource "aws_iam_role" "fluent_bit" {
+  name = "${var.cluster_name}-fluent-bit-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -351,7 +349,7 @@ resource "aws_iam_role" "cloudwatch_observability" {
       Action = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = {
-          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:amazon-cloudwatch:cloudwatch-observability-sa"
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:amazon-cloudwatch:fluent-bit"
           "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
         }
       }
@@ -361,19 +359,73 @@ resource "aws_iam_role" "cloudwatch_observability" {
   tags = var.common_tags
 }
 
-resource "aws_iam_role_policy_attachment" "cloudwatch_observability" {
-  role       = aws_iam_role.cloudwatch_observability.name
+resource "aws_iam_role_policy_attachment" "fluent_bit" {
+  role       = aws_iam_role.fluent_bit.name
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
 
-# CloudWatch Log Group for container logs
-resource "aws_cloudwatch_log_group" "container_logs" {
-  name              = "/aws/eks/${var.cluster_name}/container-logs"
-  retention_in_days = 7
+# Deploy aws-fluent-bit via Helm (lightweight alternative to managed addon)
+resource "helm_release" "fluent_bit" {
+  name             = "aws-fluent-bit"
+  repository       = "https://aws.github.io/eks-charts"
+  chart            = "aws-for-fluent-bit"
+  namespace        = "amazon-cloudwatch"
+  create_namespace = true
+  version          = "0.1.33"
 
-  tags = var.common_tags
+  # FIX: Correct escaping for annotations mapping to IAM IRSA role
+  set {
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = aws_iam_role.fluent_bit.arn
+  }
 
-  depends_on = [aws_eks_cluster.main]
+  # FIX: Correct parameter blocks using 'cloudWatchLogs' structure
+  set {
+    name  = "cloudWatchLogs.enabled"
+    value = "true"
+  }
+
+  set {
+    name  = "cloudWatchLogs.region"
+    value = data.aws_region.current.name
+  }
+
+  set {
+    name  = "cloudWatchLogs.logGroupName"
+    value = aws_cloudwatch_log_group.container_logs.name
+  }
+
+  set {
+    name  = "cloudWatchLogs.autoCreateGroup"
+    value = "false"
+  }
+
+  # Minimal resource constraints for Free Tier t3.micro nodes (Kept your perfect limits!)
+  set {
+    name  = "resources.requests.cpu"
+    value = "50m"
+  }
+
+  set {
+    name  = "resources.requests.memory"
+    value = "50Mi"
+  }
+
+  set {
+    name  = "resources.limits.cpu"
+    value = "100m"
+  }
+
+  set {
+    name  = "resources.limits.memory"
+    value = "100Mi"
+  }
+
+  depends_on = [
+    aws_eks_node_group.main,
+    aws_iam_role_policy_attachment.fluent_bit,
+    aws_cloudwatch_log_group.container_logs
+  ]
 }
 
 # Create Application Namespace
