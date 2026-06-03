@@ -29,6 +29,10 @@ aws s3api put-bucket-versioning \
   --bucket karatu-terraform-state-jamesadewara \
   --versioning-configuration Status=Enabled
 
+mkdir -p terraform/modules/eks/charts
+helm repo add eks https://aws.github.io/eks-charts
+helm pull eks/aws-load-balancer-controller --untar --untardir terraform/modules/eks/charts
+
 # Initialize Terraform with S3 backend
 terraform init
 
@@ -106,8 +110,9 @@ Deploy all Kubernetes resources from the k8s/ directory (organized by component)
 
 ```bash
 # Deploy all components
-kubectl apply -f k8s/
-
+kubectl apply -R -f k8s/
+# Build the namespace first using your file
+kubectl apply -f k8s/namespace/namespace.yaml
 # Verify all resources are created
 kubectl get pods -n retail-app
 kubectl get svc -n retail-app

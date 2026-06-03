@@ -259,18 +259,31 @@ resource "aws_iam_role_policy_attachment" "alb_controller" {
   policy_arn = aws_iam_policy.alb_controller.arn
 }
 
-# Deploy AWS Load Balancer Controller via Helm (with lightweight resource constraints for Free Tier)
+# Deploy AWS Load Balancer Controller via Helm (local chart)
 resource "helm_release" "alb_controller" {
   name             = "aws-load-balancer-controller"
-  repository       = "https://aws.github.io/eks-charts"
-  chart            = "aws-load-balancer-controller"
+  chart            = "${path.module}/charts/aws-load-balancer-controller"
   namespace        = "kube-system"
   create_namespace = false
-  version          = "2.7.0"
 
   set {
     name  = "clusterName"
     value = var.cluster_name
+  }
+
+  set {
+    name  = "vpcId"
+    value = var.vpc_id
+  }
+
+  set {
+    name  = "region"
+    value = "us-east-1"
+  }
+
+  set {
+    name  = "replicaCount"
+    value = "1"
   }
 
   # Enable service account with IRSA annotation

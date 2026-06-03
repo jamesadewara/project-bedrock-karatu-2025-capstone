@@ -178,7 +178,7 @@ resource "kubernetes_secret" "catalog_db" {
 
   type = "Opaque"
 
-  depends_on = [module.rds, module.eks]
+  depends_on = [module.rds, module.eks.kubernetes_namespace]
 }
 
 resource "kubernetes_secret" "orders_db" {
@@ -197,7 +197,7 @@ resource "kubernetes_secret" "orders_db" {
 
   type = "Opaque"
 
-  depends_on = [module.rds, module.eks]
+  depends_on = [module.rds, module.eks.kubernetes_namespace]
 }
 
 # S3 BUCKET - Assets
