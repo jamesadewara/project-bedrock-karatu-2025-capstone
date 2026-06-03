@@ -1,5 +1,5 @@
 # Project Bedrock - Deployment Runbook
-
+ 
 ## Prerequisites
 - AWS CLI configured with appropriate credentials
 - kubectl installed (v1.28+)
