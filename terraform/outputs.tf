@@ -1,7 +1,3 @@
-# ============================================================
-# OUTPUTS - Required for Grading Script
-# ============================================================
-
 output "cluster_endpoint" {
   description = "EKS Cluster Endpoint"
   value       = module.eks.cluster_endpoint

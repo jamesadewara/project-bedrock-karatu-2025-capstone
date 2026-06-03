@@ -1,46 +1,27 @@
-# ============================================================
-# VALUES.YAML - Project Bedrock Custom Overrides
-# All databases replaced with managed AWS services
-# No hardcoded credentials - all injected via Secrets Manager
-# ============================================================
-
-# Global settings
 global:
-  # Namespace for all resources
   namespaceOverride: retail-app
 
-# ============================================================
-# UI SERVICE - Frontend with ALB Ingress + HTTPS
-# ============================================================
 ui:
   enabled: true
   replicaCount: 2
-
   service:
     type: ClusterIP
     port: 80
     targetPort: 8080
-
   ingress:
     enabled: true
     className: alb
     annotations:
       alb.ingress.kubernetes.io/scheme: internet-facing
       alb.ingress.kubernetes.io/target-type: ip
-      # HTTPS with ACM certificate (Namecheap domain)
-      alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
-      alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:REGION:ACCOUNT:certificate/ID"  # FILL THIS AFTER TERRAFORM APPLY: use terraform output acm_certificate_arn
-      alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
       alb.ingress.kubernetes.io/healthcheck-path: /health
       alb.ingress.kubernetes.io/success-codes: "200"
-      alb.ingress.kubernetes.io/actions.ssl-redirect: '{"Type": "redirect", "RedirectConfig": { "Protocol": "HTTPS", "Port": "443", "StatusCode": "HTTP_301"}}'
     hosts:
-      # YOUR NAMECHEAP DOMAIN - Replace after Terraform creates Route 53
-      - host: "yourdomain.com"  # Set to your actual domain
+      - host: ""
         paths:
           - path: /
             pathType: Prefix
-
   resources:
     requests:
       memory: "128Mi"
@@ -49,26 +30,15 @@ ui:
       memory: "256Mi"
       cpu: "200m"
 
-# ============================================================
-# CATALOG SERVICE - MySQL -> RDS MySQL
-# ============================================================
 catalog:
   enabled: true
   replicaCount: 2
-
-  # DISABLE in-cluster MySQL
   mysql:
     enabled: false
-
-  # Service configuration
   service:
     type: ClusterIP
     port: 80
     targetPort: 8080
-
-  # Environment variables - RDS MySQL connection
-  # Credentials pulled from AWS Secrets Manager via External Secrets Operator
-  # or injected via Terraform-created secrets
   env:
     - name: DB_HOST
       valueFrom:
@@ -92,7 +62,6 @@ catalog:
         secretKeyRef:
           name: catalog-db-credentials
           key: dbname
-
   resources:
     requests:
       memory: "128Mi"
@@ -101,36 +70,25 @@ catalog:
       memory: "256Mi"
       cpu: "200m"
 
-# ============================================================
-# CARTS SERVICE - DynamoDB -> Real DynamoDB Table
-# ============================================================
 carts:
   enabled: true
   replicaCount: 2
-
-  # DISABLE in-cluster DynamoDB (local mode)
   dynamodb:
     enabled: false
-
-  # Service account with IRSA for DynamoDB access
   serviceAccount:
     create: true
     name: carts
     annotations:
-      eks.amazonaws.com/role-arn: ""  # FILL THIS AFTER TERRAFORM APPLY: use terraform output or from aws_iam_role.carts_dynamodb
-
+      eks.amazonaws.com/role-arn: "arn:aws:iam::YOUR_ACCOUNT_ID:role/bedrock-carts-dynamodb-role"
   service:
     type: ClusterIP
     port: 80
     targetPort: 8080
-
-  # Environment variables for real DynamoDB
   env:
     - name: CARTS_DYNAMODB_TABLE
       value: bedrock-carts
     - name: AWS_REGION
       value: us-east-1
-
   resources:
     requests:
       memory: "128Mi"
@@ -139,23 +97,15 @@ carts:
       memory: "256Mi"
       cpu: "200m"
 
-# ============================================================
-# ORDERS SERVICE - MySQL -> RDS PostgreSQL
-# ============================================================
 orders:
   enabled: true
   replicaCount: 2
-
-  # DISABLE in-cluster MySQL
   mysql:
     enabled: false
-
   service:
     type: ClusterIP
     port: 80
     targetPort: 8080
-
-  # Environment variables - RDS PostgreSQL connection
   env:
     - name: SPRING_DATASOURCE_WRITER_URL
       valueFrom:
@@ -187,7 +137,6 @@ orders:
         secretKeyRef:
           name: orders-db-credentials
           key: password
-
   resources:
     requests:
       memory: "256Mi"
@@ -196,22 +145,15 @@ orders:
       memory: "512Mi"
       cpu: "400m"
 
-# ============================================================
-# CHECKOUT SERVICE - Redis stays in-cluster (acceptable)
-# ============================================================
 checkout:
   enabled: true
   replicaCount: 2
-
-  # Redis stays in-cluster as per exam requirements
   redis:
     enabled: true
-
   service:
     type: ClusterIP
     port: 80
     targetPort: 8080
-
   resources:
     requests:
       memory: "128Mi"
@@ -220,18 +162,13 @@ checkout:
       memory: "256Mi"
       cpu: "200m"
 
-# ============================================================
-# ASSETS SERVICE - Static assets
-# ============================================================
 assets:
   enabled: true
   replicaCount: 1
-
   service:
     type: ClusterIP
     port: 80
     targetPort: 8080
-
   resources:
     requests:
       memory: "64Mi"

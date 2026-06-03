@@ -1,46 +1,3 @@
-# ============================================================
-# MAIN.TF - Project Bedrock Root Module
-# Orchestrates all modules and resources
-# ============================================================
-
-# ============================================================
-# WHERE DOES THE RETAIL STORE APP COME FROM?
-# ============================================================
-# The retail-store-sample-app is NOT in your repository.
-# It is maintained by AWS and published as container images to:
-#   public.ecr.aws/aws-containers/retail-store-sample-ui
-#   public.ecr.aws/aws-containers/retail-store-sample-catalog
-#   public.ecr.aws/aws-containers/retail-store-sample-cart
-#   public.ecr.aws/aws-containers/retail-store-sample-orders
-#   public.ecr.aws/aws-containers/retail-store-sample-checkout
-#   public.ecr.aws/aws-containers/retail-store-sample-assets
-#
-# The Helm chart (helm/Chart.yaml) references these OCI charts:
-#   oci://public.ecr.aws/aws-containers/retail-store-sample-ui-chart
-#   oci://public.ecr.aws/aws-containers/retail-store-sample-catalog-chart
-#   etc.
-#
-# When you run "helm dependency update", Helm downloads these charts.
-# When you run "helm upgrade --install", Helm pulls the container images
-# from AWS Public ECR and deploys them to your EKS cluster.
-#
-# YOUR repository contains:
-#   - Infrastructure code (Terraform)
-#   - Helm values overrides (your custom values.yaml)
-#   - CI/CD pipelines (GitHub Actions)
-#   - Lambda code (asset processor)
-#   - Documentation (README, RUNBOOK)
-#
-# The actual application code (Java, Go, Node.js) is maintained by AWS.
-# You only configure HOW it runs on YOUR infrastructure.
-# ============================================================
-
-# Local values for consistency
-# Removed locals to strictly adhere to variables.tf
-# ============================================================
-# DATA SOURCES
-# ============================================================
-
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
@@ -56,10 +13,7 @@ resource "random_string" "db_password" {
   numeric = true
 }
 
-# ============================================================
 # VPC MODULE
-# ============================================================
-
 module "vpc" {
   source = "./modules/vpc"
 
@@ -71,27 +25,25 @@ module "vpc" {
   private_subnet_cidrs = var.private_subnet_cidrs
 }
 
-# ============================================================
 # EKS MODULE
-# ============================================================
-
 module "eks" {
   source = "./modules/eks"
 
-  cluster_name       = var.cluster_name
-  cluster_version    = var.eks_version
-  vpc_id             = module.vpc.vpc_id
-  private_subnet_ids = module.vpc.private_subnet_ids
-  public_subnet_ids  = module.vpc.public_subnet_ids
-  app_namespace      = var.app_namespace
-  common_tags        = { Project = var.project_tag }
-  dev_user_arn       = aws_iam_user.dev_view.arn
+  cluster_name        = var.cluster_name
+  cluster_version     = var.eks_version
+  vpc_id              = module.vpc.vpc_id
+  private_subnet_ids  = module.vpc.private_subnet_ids
+  public_subnet_ids   = module.vpc.public_subnet_ids
+  app_namespace       = var.app_namespace
+  common_tags         = { Project = var.project_tag }
+  dev_user_arn        = aws_iam_user.dev_view.arn
+  db_username         = var.db_username
+  db_password         = random_string.db_password.result
+  db_name_catalog     = var.db_name_catalog
+  db_name_orders      = var.db_name_orders
 }
 
-# ============================================================
 # RDS MODULE - Managed Data Layer
-# ============================================================
-
 module "rds" {
   source = "./modules/rds"
 
@@ -108,10 +60,7 @@ module "rds" {
   depends_on = [module.vpc, module.eks]
 }
 
-# ============================================================
 # DYNAMODB TABLE - Cart Service
-# ============================================================
-
 resource "aws_dynamodb_table" "carts" {
   name         = "bedrock-carts"
   billing_mode = "PAY_PER_REQUEST"
@@ -174,14 +123,11 @@ resource "aws_iam_role_policy" "carts_dynamodb" {
   })
 }
 
-# ============================================================
 # SECRETS MANAGER - Database Credentials
-# ============================================================
-
 resource "aws_secretsmanager_secret" "catalog_db" {
   name                    = "bedrock/catalog-db-credentials"
   description             = "Catalog RDS credentials"
-  recovery_window_in_days = 7
+  recovery_window_in_days = 0 # normally 7 days is ideal
   tags                    = { Project = var.project_tag }
 }
 
@@ -200,7 +146,7 @@ resource "aws_secretsmanager_secret_version" "catalog_db" {
 resource "aws_secretsmanager_secret" "orders_db" {
   name                    = "bedrock/orders-db-credentials"
   description             = "Orders RDS credentials"
-  recovery_window_in_days = 7
+  recovery_window_in_days = 0 # normally 7 days is ideal
   tags                    = { Project = var.project_tag }
 }
 
@@ -216,14 +162,14 @@ resource "aws_secretsmanager_secret_version" "orders_db" {
   })
 }
 
-# ============================================================
-# KUBERNETES SECRETS - Inject RDS Credentials to Pods
-# ============================================================
-
+# Kubernetes Secrets - RDS Credentials for Pods
 resource "kubernetes_secret" "catalog_db" {
   metadata {
     name      = "catalog-db-credentials"
     namespace = var.app_namespace
+    annotations = {
+      "helm.sh/resource-policy" = "keep"
+    }
   }
 
   data = {
@@ -235,13 +181,16 @@ resource "kubernetes_secret" "catalog_db" {
 
   type = "Opaque"
 
-  depends_on = [module.eks]
+  depends_on = [module.rds, module.eks]
 }
 
 resource "kubernetes_secret" "orders_db" {
   metadata {
     name      = "orders-db-credentials"
     namespace = var.app_namespace
+    annotations = {
+      "helm.sh/resource-policy" = "keep"
+    }
   }
 
   data = {
@@ -254,13 +203,10 @@ resource "kubernetes_secret" "orders_db" {
 
   type = "Opaque"
 
-  depends_on = [module.eks]
+  depends_on = [module.rds, module.eks]
 }
 
-# ============================================================
 # S3 BUCKET - Assets
-# ============================================================
-
 resource "aws_s3_bucket" "assets" {
   bucket = var.s3_bucket_name
   tags   = { Project = var.project_tag }
@@ -292,10 +238,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "assets" {
   }
 }
 
-# ============================================================
 # LAMBDA FUNCTION - Asset Processor
-# ============================================================
-
 resource "aws_iam_role" "lambda_execution" {
   name = "bedrock-lambda-execution-role"
 
@@ -383,10 +326,7 @@ resource "aws_s3_bucket_notification" "assets" {
   depends_on = [aws_lambda_permission.s3_invoke]
 }
 
-# ============================================================
 # IAM USER - Developer Access (bedrock-dev-view)
-# ============================================================
-
 resource "aws_iam_user" "dev_view" {
   name = var.iam_user_dev
   tags = { Project = var.project_tag }
@@ -415,39 +355,19 @@ resource "aws_iam_user_policy" "dev_s3_put" {
   })
 }
 
-# AWS-AUTH ConfigMap is managed inside the EKS module (modules/eks/main.tf)
-# dev_user_arn is passed via the module "eks" block above
-
-# ============================================================
 # CLOUDWATCH - Control Plane Logging (Enabled in EKS Module)
 # Container Logging via EKS Add-on (in EKS Module)
-# ============================================================
-
 # Log Group for Lambda (already created by Lambda service, but we ensure retention)
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${var.lambda_function_name}"
   retention_in_days = 7
   tags              = { Project = var.project_tag }
+  
+  lifecycle {
+    ignore_changes = [name]  # Ignore if already exists
+    prevent_destroy = false
+  }
 }
-
-# ============================================================
-# ROUTE 53 + NAMECHEAP DOMAIN SETUP
-# ============================================================
-# You have a Namecheap domain. Here's how to connect it to AWS:
-#
-# STEP 1: In Namecheap dashboard, change nameservers to AWS:
-#   - ns-xxx.awsdns-xx.com
-#   - ns-xxx.awsdns-xx.org
-#   - ns-xxx.awsdns-xx.co.uk
-#   - ns-xxx.awsdns-xx.net
-# (Terraform will output these after creating the hosted zone)
-#
-# STEP 2: Terraform creates the Route 53 Hosted Zone and records
-#
-# STEP 3: Request ACM certificate (validated via DNS)
-#
-# STEP 4: ALB uses the ACM certificate for HTTPS
-# ============================================================
 
 # ACM Certificate for the domain
 resource "aws_acm_certificate" "main" {

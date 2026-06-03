@@ -1,10 +1,3 @@
-# ============================================================
-# EKS MODULE - STUDENT CREDIT OPTIMIZED
-# Uses t2.micro (free tier eligible) instead of t3.micro
-# t2.micro: 1 vCPU, 1GB RAM - sufficient for 5 microservices with low traffic
-# ============================================================
-
-
 # EKS Cluster Role
 resource "aws_iam_role" "cluster" {
   name = "${var.cluster_name}-cluster-role"
@@ -121,13 +114,6 @@ data "tls_certificate" "eks" {
   url = aws_eks_cluster.main.identity[0].oidc[0].issuer
 }
 
-# STUDENT CREDIT OPTIMIZED: t2.micro (free tier eligible)
-# t2.micro specs: 1 vCPU, 1GB RAM
-# Free tier: 750 hours/month for 12 months (new accounts)
-# AWS Educate: t2 instances are allowed (t2.nano through t2.2xlarge)
-# 2 nodes * 24 hours * 30 days = 1,440 hours
-# With free tier: First 750 hours free, remaining 690 hours = ~$8.97/month
-# Without free tier: ~$18.60/month for 2 nodes
 resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "${var.cluster_name}-nodes"
@@ -265,32 +251,6 @@ resource "aws_iam_role_policy" "alb_controller" {
   })
 }
 
-# Kubernetes Provider for EKS
-provider "kubernetes" {
-  host                   = aws_eks_cluster.main.endpoint
-  cluster_ca_certificate = base64decode(aws_eks_cluster.main.certificate_authority[0].data)
-
-  exec {
-    api_version = "client.authentication.k8s.io/v1beta1"
-    command     = "aws"
-    args        = ["eks", "get-token", "--cluster-name", aws_eks_cluster.main.name]
-  }
-}
-
-# Helm Provider
-provider "helm" {
-  kubernetes {
-    host                   = aws_eks_cluster.main.endpoint
-    cluster_ca_certificate = base64decode(aws_eks_cluster.main.certificate_authority[0].data)
-
-    exec {
-      api_version = "client.authentication.k8s.io/v1beta1"
-      command     = "aws"
-      args        = ["eks", "get-token", "--cluster-name", aws_eks_cluster.main.name]
-    }
-  }
-}
-
 # AWS Load Balancer Controller Helm Release
 resource "helm_release" "aws_load_balancer_controller" {
   name       = "aws-load-balancer-controller"
@@ -359,37 +319,4 @@ resource "kubernetes_config_map_v1_data" "aws_auth" {
   force = true
 
   depends_on = [aws_eks_node_group.main]
-}
-
-# Outputs
-output "cluster_endpoint" {
-  value = aws_eks_cluster.main.endpoint
-}
-
-output "cluster_name" {
-  value = aws_eks_cluster.main.name
-}
-
-output "cluster_certificate_authority" {
-  value = aws_eks_cluster.main.certificate_authority[0].data
-}
-
-output "oidc_provider_arn" {
-  value = aws_iam_openid_connect_provider.eks.arn
-}
-
-output "oidc_provider_url" {
-  value = aws_iam_openid_connect_provider.eks.url
-}
-
-output "node_security_group_id" {
-  value = aws_security_group.nodes.id
-}
-
-output "alb_controller_role_arn" {
-  value = aws_iam_role.alb_controller.arn
-}
-
-output "cluster_security_group_id" {
-  value = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
 }

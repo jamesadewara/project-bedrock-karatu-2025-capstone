@@ -1,7 +1,3 @@
-# ============================================================
-# VARIABLES - Project Bedrock
-# ============================================================
-
 variable "region" {
   description = "AWS Region"
   type        = string
@@ -59,7 +55,7 @@ variable "eks_version" {
 variable "db_username" {
   description = "RDS Master Username"
   type        = string
-  default     = "admin"
+  default     = "bedrockadmin"
   sensitive   = true
 }
 
@@ -81,15 +77,10 @@ variable "availability_zones" {
   default     = ["us-east-1a", "us-east-1b"]
 }
 
-# ============================================================
-# NAMECHEAP DOMAIN VARIABLE
-# ============================================================
-# Replace with your actual Namecheap domain
-# Example: "mydomain.com" or "store.mydomain.com"
 variable "domain_name" {
-  description = "Your Namecheap domain name for the retail store"
+  description = "My Namecheap domain name for the retail store, Example: 'mydomain.com' or 'store.mydomain.com'"
   type        = string
-  default     = "spatialdesign3d.site" # Change to your Namecheap domain
+  default     = "spatialdesign3d.site"
 }
 
 variable "vpc_cidr" {

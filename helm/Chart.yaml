@@ -1,16 +1,10 @@
-# ============================================================
-# CHART.YAML - Retail Store Helm Chart
-# Wrapper chart for AWS retail-store-sample-app
-# ============================================================
 apiVersion: v2
 name: retail-store
-description: InnovateMart Retail Store Application - Helm deployment for Project Bedrock
+description: InnovateMart Retail Store Application
 type: application
 version: 1.0.0
 appVersion: "0.8.0"
 
-# Dependencies: AWS retail-store-sample-app microservices
-# Using OCI registry from public.ecr.aws
 dependencies:
   - name: ui
     repository: oci://public.ecr.aws/aws-containers/retail-store-sample-ui-chart

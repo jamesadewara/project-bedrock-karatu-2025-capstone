@@ -37,10 +37,34 @@ variable "common_tags" {
 variable "aws_eks_node_group_instance_types" {
   description = "EKS Node Group Instance Types"
   type        = list(string)
-  default     = ["t2.micro"]
+  default     = ["t3.micro"]
 }
 
 variable "dev_user_arn" {
   description = "IAM ARN of the developer user to map in aws-auth"
+  type        = string
+}
+
+variable "db_username" {
+  description = "RDS Master Username"
+  type        = string
+  sensitive   = true
+}
+
+variable "db_password" {
+  description = "RDS Master Password"
+  type        = string
+  sensitive   = true
+}
+
+
+
+variable "db_name_catalog" {
+  description = "Catalog database name"
+  type        = string
+}
+
+variable "db_name_orders" {
+  description = "Orders database name"
   type        = string
 }

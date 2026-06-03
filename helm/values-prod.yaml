@@ -1,41 +1,27 @@
-# ============================================================
-# VALUES-PROD.YAML - Production Overrides
-# Stricter resource limits, higher replicas, TLS enabled
-# ============================================================
-
-# Global settings
 global:
   namespaceOverride: retail-app
 
-# ============================================================
-# UI SERVICE - Production with TLS
-# ============================================================
 ui:
   enabled: true
   replicaCount: 3
-
   service:
     type: ClusterIP
     port: 80
     targetPort: 8080
-
   ingress:
     enabled: true
     className: alb
     annotations:
       alb.ingress.kubernetes.io/scheme: internet-facing
       alb.ingress.kubernetes.io/target-type: ip
-      alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
-      alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:YOUR_ACCOUNT_ID:certificate/YOUR_CERT_ID
-      alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
       alb.ingress.kubernetes.io/healthcheck-path: /health
       alb.ingress.kubernetes.io/success-codes: "200"
     hosts:
-      - host: bedrock.jamesadewara.nip.io
+      - host: ""
         paths:
           - path: /
             pathType: Prefix
-
   resources:
     requests:
       memory: "256Mi"
@@ -44,21 +30,15 @@ ui:
       memory: "512Mi"
       cpu: "400m"
 
-# ============================================================
-# CATALOG SERVICE - Production
-# ============================================================
 catalog:
   enabled: true
   replicaCount: 3
-
   mysql:
     enabled: false
-
   service:
     type: ClusterIP
     port: 80
     targetPort: 8080
-
   env:
     - name: DB_HOST
       valueFrom:
@@ -82,7 +62,6 @@ catalog:
         secretKeyRef:
           name: catalog-db-credentials
           key: dbname
-
   resources:
     requests:
       memory: "256Mi"
@@ -91,33 +70,25 @@ catalog:
       memory: "512Mi"
       cpu: "400m"
 
-# ============================================================
-# CARTS SERVICE - Production
-# ============================================================
 carts:
   enabled: true
   replicaCount: 3
-
   dynamodb:
     enabled: false
-
   serviceAccount:
     create: true
     name: carts
     annotations:
-      eks.amazonaws.com/role-arn: arn:aws:iam::YOUR_ACCOUNT_ID:role/bedrock-carts-dynamodb-role
-
+      eks.amazonaws.com/role-arn: "arn:aws:iam::YOUR_ACCOUNT_ID:role/bedrock-carts-dynamodb-role"
   service:
     type: ClusterIP
     port: 80
     targetPort: 8080
-
   env:
     - name: CARTS_DYNAMODB_TABLE
       value: bedrock-carts
     - name: AWS_REGION
       value: us-east-1
-
   resources:
     requests:
       memory: "256Mi"
@@ -126,21 +97,15 @@ carts:
       memory: "512Mi"
       cpu: "400m"
 
-# ============================================================
-# ORDERS SERVICE - Production
-# ============================================================
 orders:
   enabled: true
   replicaCount: 3
-
   mysql:
     enabled: false
-
   service:
     type: ClusterIP
     port: 80
     targetPort: 8080
-
   env:
     - name: SPRING_DATASOURCE_WRITER_URL
       valueFrom:
@@ -172,7 +137,6 @@ orders:
         secretKeyRef:
           name: orders-db-credentials
           key: password
-
   resources:
     requests:
       memory: "512Mi"
@@ -181,21 +145,15 @@ orders:
       memory: "1Gi"
       cpu: "800m"
 
-# ============================================================
-# CHECKOUT SERVICE - Production
-# ============================================================
 checkout:
   enabled: true
   replicaCount: 3
-
   redis:
     enabled: true
-
   service:
     type: ClusterIP
     port: 80
     targetPort: 8080
-
   resources:
     requests:
       memory: "256Mi"
@@ -204,18 +162,13 @@ checkout:
       memory: "512Mi"
       cpu: "400m"
 
-# ============================================================
-# ASSETS SERVICE - Production
-# ============================================================
 assets:
   enabled: true
   replicaCount: 2
-
   service:
     type: ClusterIP
     port: 80
     targetPort: 8080
-
   resources:
     requests:
       memory: "128Mi"

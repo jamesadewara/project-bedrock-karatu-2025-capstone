@@ -1,10 +1,3 @@
-# ============================================================
-# RDS MODULE - STUDENT CREDIT OPTIMIZED
-# Uses db.t2.micro (free tier eligible) instead of db.t3.micro
-# db.t2.micro: 1 vCPU, 1GB RAM - sufficient for sample app
-# ============================================================
-
-
 # DB Subnet Group
 resource "aws_db_subnet_group" "main" {
   name       = "${var.eks_cluster_name}-db-subnet-group"
@@ -80,10 +73,6 @@ resource "aws_db_parameter_group" "postgres" {
   tags = var.common_tags
 }
 
-# STUDENT CREDIT OPTIMIZED: RDS MySQL - db.t2.micro (free tier eligible)
-# Free tier: 750 hours/month of db.t2.micro for 12 months (new accounts)
-# AWS Educate: RDS is covered by credits
-# db.t2.micro specs: 1 vCPU, 1GB RAM - sufficient for catalog service
 resource "aws_db_instance" "catalog" {
   identifier = "${var.eks_cluster_name}-catalog"
 
@@ -116,8 +105,6 @@ resource "aws_db_instance" "catalog" {
   })
 }
 
-# STUDENT CREDIT OPTIMIZED: RDS PostgreSQL - db.t2.micro
-# Note: PostgreSQL free tier is only for db.t2.micro (NOT db.t3.micro)
 resource "aws_db_instance" "orders" {
   identifier = "${var.eks_cluster_name}-orders"
 
@@ -148,25 +135,4 @@ resource "aws_db_instance" "orders" {
     Name = "${var.eks_cluster_name}-orders-postgres"
     Service = "orders"
   })
-}
-
-# Outputs
-output "catalog_endpoint" {
-  value = aws_db_instance.catalog.address
-}
-
-output "catalog_port" {
-  value = aws_db_instance.catalog.port
-}
-
-output "orders_endpoint" {
-  value = aws_db_instance.orders.address
-}
-
-output "orders_port" {
-  value = aws_db_instance.orders.port
-}
-
-output "rds_security_group_id" {
-  value = aws_security_group.rds.id
 }

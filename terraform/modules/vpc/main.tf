@@ -1,9 +1,3 @@
-# ============================================================
-# VPC MODULE - project-bedrock-vpc
-# Public and Private Subnets across 2 AZs
-# ============================================================
-
-
 # VPC
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
@@ -147,6 +141,11 @@ resource "aws_cloudwatch_log_group" "vpc_flow" {
   name              = "/aws/vpc/${var.name}-flow-logs"
   retention_in_days = 7
   tags              = var.common_tags
+
+  lifecycle {
+    ignore_changes = [name]  # Ignore if already exists
+    prevent_destroy = false
+  }
 }
 
 resource "aws_iam_role" "vpc_flow_logs" {
@@ -184,29 +183,4 @@ resource "aws_iam_role_policy" "vpc_flow_logs" {
       Resource = "*"
     }]
   })
-}
-
-# Outputs
-output "vpc_id" {
-  value = aws_vpc.main.id
-}
-
-output "vpc_cidr" {
-  value = aws_vpc.main.cidr_block
-}
-
-output "public_subnet_ids" {
-  value = aws_subnet.public[*].id
-}
-
-output "private_subnet_ids" {
-  value = aws_subnet.private[*].id
-}
-
-output "public_subnet_cidrs" {
-  value = aws_subnet.public[*].cidr_block
-}
-
-output "private_subnet_cidrs" {
-  value = aws_subnet.private[*].cidr_block
 }

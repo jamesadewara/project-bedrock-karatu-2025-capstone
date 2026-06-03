@@ -1,7 +1,3 @@
-# ============================================================
-# TERRAFORM BACKEND CONFIGURATION
-# Remote State: S3 with native locking (no DynamoDB needed)
-# ============================================================
 terraform {
   required_version = ">= 1.5.0"
 
