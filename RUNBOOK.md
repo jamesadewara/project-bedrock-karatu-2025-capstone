@@ -11,7 +11,15 @@
 ```bash
 cd terraform
 
-# Create S3 bucket for Terraform state (one-time setup)
+# Step 1a: Download AWS Load Balancer Controller IAM Policy
+# The ALB controller needs permissions to create and manage Application Load Balancers on your behalf.
+# Download the official AWS policy file to the local modules/eks directory:
+curl -s https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json \
+  > modules/eks/alb_controller_policy.json
+
+echo "✓ ALB controller policy downloaded to modules/eks/alb_controller_policy.json"
+
+# Step 1b: Create S3 bucket for Terraform state (one-time setup)
 aws s3api create-bucket \
   --bucket karatu-terraform-state-jamesadewara \
   --region us-east-1
@@ -39,6 +47,9 @@ terraform output -json | jq '{cluster_endpoint, cluster_name, region, vpc_id, as
 # Get your AWS Account ID (needed for Kubernetes manifests)
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 echo "AWS Account ID: $ACCOUNT_ID"
+
+AWS requires the Load Balancer Controller to have permissions to create, modify, and delete network infrastructure components (like ALBs, Target Groups, and Security Groups) on your behalf.
+curl -s https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json > /home/WORKSPACE/project-bedrock-karatu-2025-capstone/terraform/modules/eks/alb_controller_policy.json
 ```
 
 ## Phase 2: Cluster Access Configuration

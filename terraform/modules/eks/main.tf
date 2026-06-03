@@ -220,7 +220,7 @@ resource "null_resource" "enable_prefix_delegation" {
   ]
 }
 
-# AWS Load Balancer Controller Service Account
+# AWS Load Balancer Controller IAM Role (IRSA)
 resource "aws_iam_role" "alb_controller" {
   name = "${var.cluster_name}-alb-controller-role"
 
@@ -244,40 +244,20 @@ resource "aws_iam_role" "alb_controller" {
   tags = var.common_tags
 }
 
-resource "aws_iam_role_policy" "alb_controller" {
-  name = "${var.cluster_name}-alb-controller-policy"
-  role = aws_iam_role.alb_controller.id
+# AWS Load Balancer Controller IAM Policy (from official AWS policy file)
+resource "aws_iam_policy" "alb_controller" {
+  name        = "${var.cluster_name}-alb-controller-policy"
+  description = "Policy for AWS Load Balancer Controller to manage ALBs and target groups"
+  policy      = file("${path.module}/alb_controller_policy.json")
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "elasticloadbalancing:DescribeLoadBalancers",
-          "elasticloadbalancing:DescribeLoadBalancerAttributes",
-          "elasticloadbalancing:DescribeListeners",
-          "elasticloadbalancing:DescribeListenerCertificates",
-          "elasticloadbalancing:DescribeSSLPolicies",
-          "elasticloadbalancing:DescribeRules",
-          "elasticloadbalancing:DescribeTargetGroups",
-          "elasticloadbalancing:DescribeTargetGroupAttributes",
-          "elasticloadbalancing:DescribeTargetHealth",
-          "elasticloadbalancing:DescribeTags",
-          "ec2:DescribeInstances",
-          "ec2:DescribeSubnets",
-          "ec2:DescribeSecurityGroups",
-          "ec2:DescribeVpcs",
-          "ec2:DescribeAddresses",
-          "ec2:DescribeInternetGateways",
-          "ec2:DescribeCoipPools",
-          "cognito-idp:DescribeUserPoolClient",
-          "acm:ListCertificates",
-          "acm:DescribeCertificate",
-          "iam:ListServerCertificates",
-          "iam:GetServerCertificate",
-          "waf-regional:GetWebACL",
-          "waf-regional:GetWebACLForResource",
+  tags = var.common_tags
+}
+
+# Attach policy to ALB controller role
+resource "aws_iam_role_policy_attachment" "alb_controller" {
+  role       = aws_iam_role.alb_controller.name
+  policy_arn = aws_iam_policy.alb_controller.arn
+}
           "waf-regional:AssociateWebACL",
           "waf-regional:DisassociateWebACL",
           "wafv2:GetWebACL",
@@ -321,9 +301,71 @@ resource "aws_iam_role_policy" "alb_controller" {
   })
 }
 
+# Deploy AWS Load Balancer Controller via Helm (with lightweight resource constraints for Free Tier)
+resource "helm_release" "alb_controller" {
+  name             = "aws-load-balancer-controller"
+  repository       = "https://aws.github.io/eks-charts"
+  chart            = "aws-load-balancer-controller"
+  namespace        = "kube-system"
+  create_namespace = false
+  version          = "2.7.0"
+
+  set {
+    name  = "clusterName"
+    value = var.cluster_name
+  }
+
+  # Enable service account with IRSA annotation
+  set {
+    name  = "serviceAccount.create"
+    value = "true"
+  }
+
+  set {
+    name  = "serviceAccount.name"
+    value = "aws-load-balancer-controller"
+  }
+
+  set {
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = aws_iam_role.alb_controller.arn
+  }
+
+  # Lightweight resource constraints for Free Tier t3.micro instances
+  set {
+    name  = "resources.requests.cpu"
+    value = "100m"
+  }
+
+  set {
+    name  = "resources.requests.memory"
+    value = "128Mi"
+  }
+
+  set {
+    name  = "resources.limits.cpu"
+    value = "200m"
+  }
+
+  set {
+    name  = "resources.limits.memory"
+    value = "256Mi"
+  }
+
+  # Enable logging
+  set {
+    name  = "enableLogging"
+    value = "true"
+  }
+
+  depends_on = [
+    aws_eks_node_group.main,
+    aws_iam_role_policy_attachment.alb_controller,
+    kubernetes_namespace.app
+  ]
+}
+
 # AWS Load Balancer Controller - IAM role & policy created
-# NOTE: Deployment is via kubectl manifests in k8s/aws-load-balancer-controller/ (kubectl-only approach)
-# The IAM role above provides IRSA permissions for the controller pods
 
 # CloudWatch Log Group for container logs (lightweight FluentBit)
 resource "aws_cloudwatch_log_group" "container_logs" {
