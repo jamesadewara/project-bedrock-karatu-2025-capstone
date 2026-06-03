@@ -16,6 +16,9 @@ resource "aws_iam_role" "cluster" {
   tags = var.common_tags
 }
 
+# Get current AWS region
+data "aws_region" "current" {}
+
 resource "aws_iam_role_policy_attachment" "cluster_policy" {
   role       = aws_iam_role.cluster.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
@@ -173,6 +176,48 @@ resource "aws_eks_node_group" "main" {
   ]
 
   tags = var.common_tags
+}
+
+# Enable IP Prefix Delegation on aws-node DaemonSet
+# Lifts pod limit on t3.medium from 17 to 110 pods
+resource "null_resource" "enable_prefix_delegation" {
+  triggers = {
+    cluster_id = aws_eks_cluster.main.id
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      aws eks update-kubeconfig \
+        --name ${aws_eks_cluster.main.name} \
+        --region ${data.aws_region.current.name} && \
+      kubectl patch daemonset aws-node -n kube-system \
+        --type='json' \
+        -p='[
+          {
+            "op": "add",
+            "path": "/spec/template/spec/containers/0/env/-",
+            "value": {
+              "name": "ENABLE_PREFIX_DELEGATION",
+              "value": "true"
+            }
+          },
+          {
+            "op": "add",
+            "path": "/spec/template/spec/containers/0/env/-",
+            "value": {
+              "name": "WARM_PREFIX_TARGET",
+              "value": "1"
+            }
+          }
+        ]' || true
+    EOT
+    interpreter = ["/bin/bash", "-c"]
+  }
+
+  depends_on = [
+    aws_eks_node_group.main,
+    aws_iam_role_policy_attachment.node_cni
+  ]
 }
 
 # AWS Load Balancer Controller Service Account
