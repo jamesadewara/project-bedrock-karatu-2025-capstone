@@ -47,9 +47,6 @@ terraform output -json | jq '{cluster_endpoint, cluster_name, region, vpc_id, as
 # Get your AWS Account ID (needed for Kubernetes manifests)
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 echo "AWS Account ID: $ACCOUNT_ID"
-
-AWS requires the Load Balancer Controller to have permissions to create, modify, and delete network infrastructure components (like ALBs, Target Groups, and Security Groups) on your behalf.
-curl -s https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json > /home/WORKSPACE/project-bedrock-karatu-2025-capstone/terraform/modules/eks/alb_controller_policy.json
 ```
 
 ## Phase 2: Cluster Access Configuration
@@ -64,11 +61,12 @@ aws eks update-kubeconfig \
 kubectl cluster-info
 kubectl get nodes
 
-# Verify AWS Load Balancer Controller is installed
-kubectl get pods -n kube-system | grep aws-load-balancer-controller
+# Verify AWS Load Balancer Controller is deployed (via Helm in kube-system namespace)
+kubectl get deployment -n kube-system aws-load-balancer-controller
+kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
 
-# Verify CloudWatch Observability add-on is installed
-kubectl get pods -n amazon-cloudwatch
+# Verify FluentBit is deployed for CloudWatch container logging
+kubectl get pods -n amazon-cloudwatch -l app.kubernetes.io/name=aws-for-fluent-bit
 
 # Verify EKS control plane logs are being captured
 aws logs describe-log-groups --log-group-name-prefix "/aws/eks/project-bedrock-cluster" --query 'logGroups[*].logGroupName'

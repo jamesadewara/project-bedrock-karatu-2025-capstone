@@ -258,48 +258,6 @@ resource "aws_iam_role_policy_attachment" "alb_controller" {
   role       = aws_iam_role.alb_controller.name
   policy_arn = aws_iam_policy.alb_controller.arn
 }
-          "waf-regional:AssociateWebACL",
-          "waf-regional:DisassociateWebACL",
-          "wafv2:GetWebACL",
-          "wafv2:GetWebACLForResource",
-          "wafv2:AssociateWebACL",
-          "wafv2:DisassociateWebACL",
-          "shield:GetSubscriptionState",
-          "shield:DescribeProtection",
-          "shield:CreateProtection",
-          "shield:DeleteProtection"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "elasticloadbalancing:CreateLoadBalancer",
-          "elasticloadbalancing:CreateTargetGroup",
-          "elasticloadbalancing:CreateListener",
-          "elasticloadbalancing:DeleteLoadBalancer",
-          "elasticloadbalancing:DeleteTargetGroup",
-          "elasticloadbalancing:DeleteListener",
-          "elasticloadbalancing:ModifyLoadBalancerAttributes",
-          "elasticloadbalancing:ModifyTargetGroup",
-          "elasticloadbalancing:ModifyTargetGroupAttributes",
-          "elasticloadbalancing:SetIpAddressType",
-          "elasticloadbalancing:SetSecurityGroups",
-          "elasticloadbalancing:SetSubnets",
-          "elasticloadbalancing:DeleteLoadBalancerListeners",
-          "elasticloadbalancing:RegisterTargets",
-          "elasticloadbalancing:DeregisterTargets",
-          "elasticloadbalancing:AddTags",
-          "elasticloadbalancing:RemoveTags",
-          "elasticloadbalancing:CreateRule",
-          "elasticloadbalancing:DeleteRule",
-          "elasticloadbalancing:ModifyRule"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
 
 # Deploy AWS Load Balancer Controller via Helm (with lightweight resource constraints for Free Tier)
 resource "helm_release" "alb_controller" {
