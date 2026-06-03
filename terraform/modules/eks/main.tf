@@ -72,6 +72,39 @@ resource "aws_security_group" "nodes" {
   })
 }
 
+# Allow node-to-node communication (all protocols)
+resource "aws_security_group_rule" "nodes_self_ingress" {
+  type              = "ingress"
+  from_port         = 0
+  to_port           = 65535
+  protocol          = "-1"
+  self              = true
+  security_group_id = aws_security_group.nodes.id
+  description       = "Allow all internal node-to-node communication"
+}
+
+# Allow control plane to communicate with kubelet (port 10250)
+resource "aws_security_group_rule" "control_plane_to_nodes_kubelet" {
+  type              = "ingress"
+  from_port         = 10250
+  to_port           = 10250
+  protocol          = "tcp"
+  self              = true
+  security_group_id = aws_security_group.nodes.id
+  description       = "Allow control plane to kubelet"
+}
+
+# Allow control plane to communicate with extension API servers (port 443)
+resource "aws_security_group_rule" "control_plane_to_nodes_https" {
+  type              = "ingress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  self              = true
+  security_group_id = aws_security_group.nodes.id
+  description       = "Allow control plane to extension API servers/webhooks"
+}
+
 # EKS Cluster
 resource "aws_eks_cluster" "main" {
   name     = var.cluster_name
