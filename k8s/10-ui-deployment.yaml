@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui
+  namespace: retail-app
+  labels:
+    app: ui
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ui
+  template:
+    metadata:
+      labels:
+        app: ui
+        version: v1
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: ui
+        image: public.ecr.aws/aws-containers/retail-store-sample-ui:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+        env:
+        - name: CATALOG_API_URL
+          value: http://catalog.retail-app.svc.cluster.local
+        - name: ORDERS_API_URL
+          value: http://orders.retail-app.svc.cluster.local
+        - name: CART_API_URL
+          value: http://carts.retail-app.svc.cluster.local
+        - name: CHECKOUT_API_URL
+          value: http://checkout.retail-app.svc.cluster.local
+        - name: ASSETS_API_URL
+          value: http://assets.retail-app.svc.cluster.local
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5

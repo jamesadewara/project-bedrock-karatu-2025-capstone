@@ -1,107 +1,329 @@
-# karatu-2025-capstone 
+# Project Bedrock - Deployment Runbook
 
-cd terraform 
-aws s3api create-bucket   --bucket karatu-terraform-state-jamesadewara   --region us-east-1
+## Prerequisites
+- AWS CLI configured with appropriate credentials
+- kubectl installed (v1.28+)
+- Terraform installed (v1.10+)
+- jq (JSON processor)
 
+## Phase 1: Infrastructure Provisioning (Terraform)
+
+```bash
+cd terraform
+
+# Create S3 bucket for Terraform state (one-time setup)
+aws s3api create-bucket \
+  --bucket karatu-terraform-state-jamesadewara \
+  --region us-east-1
+
+# Enable versioning on state bucket
+aws s3api put-bucket-versioning \
+  --bucket karatu-terraform-state-jamesadewara \
+  --versioning-configuration Status=Enabled
+
+# Initialize Terraform with S3 backend
+terraform init
+
+# Review planned infrastructure
 terraform plan
 
-terraform apply > ../grading.json
+# Apply infrastructure (creates VPC, EKS, RDS, DynamoDB, Lambda, S3, CloudWatch add-on, etc.)
+terraform apply -auto-approve
 
-# 1. Update kubeconfig (critical after every terraform apply)
-aws eks update-kubeconfig --name project-bedrock-cluster --region us-east-1
+# Generate grading.json (CRITICAL - required for grading)
+terraform output -json > ../grading.json
 
-# 2. Verify cluster connection
-kubectl get nodes
+# Verify Terraform outputs contain all 5 required values
+terraform output -json | jq '{cluster_endpoint, cluster_name, region, vpc_id, assets_bucket_name}'
 
-# 3. Deploy/upgrade Helm chart
-cd /home/WORKSPACE/project-bedrock-karatu-2025-capstone/helm
-helm dependency update
-helm upgrade --install retail-app . \
-  --namespace retail-app \
-  --create-namespace \
-  --values values.yaml \
-  --wait \
-  --timeout 10m
-
-# 4. Verify deployment
-kubectl get pods -n retail-app
-kubectl get ingress -n retail-app
-
-# 5. Get ALB DNS
-kubectl get ingress -n retail-app -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}'
-
-
-cd ../helm
-# Install ALB controller directly (not as dependency)
-
-helm repo add eks https://aws.github.io/eks-charts
-helm repo update
-
-# Install each service separately with OCI
-# Download and apply the official manifest
-kubectl apply -f https://github.com/aws-containers/retail-store-sample-app/releases/latest/download/kubernetes.yaml
-
-# Wait for deployment
-kubectl wait --for=condition=available deployments --all -n retail-app
-
-# Get URL
-kubectl get svc ui -n retail-app
-
-# Install Fluent Bit for CloudWatch logs
-helm install aws-for-fluent-bit eks/aws-for-fluent-bit \
-  --namespace kube-system \
-  --set cloudWatch.enabled=true \
-  --set cloudWatch.region=us-east-1 \
-  --set cloudWatch.logGroupName=/aws/eks/project-bedrock-cluster/application \
-  --set cloudWatch.logGroupTemplate=/aws/eks/project-bedrock-cluster/$kubernetes['namespace_name']
-
-helm repo add eks https://aws.github.io/eks-charts
-helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
-  --namespace kube-system \
-  --set clusterName=project-bedrock-cluster \
-  --set serviceAccount.create=true \
-  --set serviceAccount.name=aws-load-balancer-controller \
-  --set region=us-east-1 \
-  --set vpcId=$(terraform output -raw vpc_id)
-
-helm dependency update
-
-# Deploy
-helm upgrade --install retail-app . \
-  --namespace retail-app \
-  --create-namespace \
-  --values values.yaml \
-  --wait \
-  --timeout 10m
-
-
-
-What You Need to Replace
-In values.yaml and values-prod.yaml, find:
-eks.amazonaws.com/role-arn: "arn:aws:iam::{YOUR_ACCOUNT_ID}:role/bedrock-carts-dynamodb-role"
-
-Replace YOUR_ACCOUNT_ID with your actual AWS account ID. Get it from:
-```bash
-aws sts get-caller-identity --query Account --output text
+# Get your AWS Account ID (needed for Kubernetes manifests)
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+echo "AWS Account ID: $ACCOUNT_ID"
 ```
 
-# Check ALL namespaces
-kubectl get namespaces
+## Phase 2: Cluster Access Configuration
 
-# Check ALL deployments
-kubectl get deployments --all-namespaces | grep -E "ui|catalog|carts|orders|checkout"
+```bash
+# Update kubeconfig to connect to the EKS cluster
+aws eks update-kubeconfig \
+  --name project-bedrock-cluster \
+  --region us-east-1
 
-# Check ALL services
-kubectl get services --all-namespaces | grep -E "ui|catalog|carts|orders|checkout"
+# Verify cluster connectivity
+kubectl cluster-info
+kubectl get nodes
 
-# Check ALL pods
-kubectl get pods --all-namespaces | grep -E "ui|catalog|carts|orders|checkout"
+# Verify AWS Load Balancer Controller is installed
+kubectl get pods -n kube-system | grep aws-load-balancer-controller
 
-# Check pods
+# Verify CloudWatch Observability add-on is installed
+kubectl get pods -n amazon-cloudwatch
+
+# Verify EKS control plane logs are being captured
+aws logs describe-log-groups --log-group-name-prefix "/aws/eks/project-bedrock-cluster" --query 'logGroups[*].logGroupName'
+```
+
+## Phase 3: Prepare Kubernetes Secrets
+
+Terraform already created the Kubernetes secrets in the retail-app namespace:
+- `catalog-db-credentials` (RDS MySQL credentials)
+- `orders-db-credentials` (RDS PostgreSQL credentials)
+
+Verify secrets exist:
+```bash
+kubectl get secrets -n retail-app
+kubectl describe secret catalog-db-credentials -n retail-app
+```
+
+## Phase 4: Update Carts ServiceAccount with Your AWS Account ID
+
+The carts ServiceAccount uses IRSA (IAM Roles for Service Accounts) to access DynamoDB.
+
+```bash
+# Get your AWS Account ID
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+# Update the carts service account manifest with your Account ID
+sed -i "s|arn:aws:iam::.*:role/bedrock-carts-dynamodb-role|arn:aws:iam::${ACCOUNT_ID}:role/bedrock-carts-dynamodb-role|g" k8s/carts/serviceaccount.yaml
+
+# Verify the replacement
+grep "role-arn" k8s/carts/serviceaccount.yaml
+# Should show: arn:aws:iam::YOUR_ACCOUNT_ID:role/bedrock-carts-dynamodb-role
+```
+
+## Phase 5: Deploy Application (kubectl manifests)
+
+Deploy all Kubernetes resources from the k8s/ directory (organized by component):
+
+```bash
+# Deploy all components
+kubectl apply -f k8s/
+
+# Verify all resources are created
 kubectl get pods -n retail-app
+kubectl get svc -n retail-app
+kubectl get ingress -n retail-app
 
-# Get ALB DNS (your URL)
-kubectl get ingress -n retail-app -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}'
+# Wait for all deployments to be ready (may take 2-3 minutes)
+kubectl wait --for=condition=available deployment --all -n retail-app --timeout=300s
 
-# Test
-curl -I http://<<ALB-DNS>
+# Check pod status
+kubectl get pods -n retail-app -o wide
+
+# View pod logs to ensure services are starting correctly
+kubectl logs -n retail-app -l app=ui --tail=50
+kubectl logs -n retail-app -l app=catalog --tail=50
+```
+
+## Phase 6: Verify ALB is Provisioned
+
+The AWS Load Balancer Controller creates an Application Load Balancer when the Ingress is applied.
+
+```bash
+# Check ingress status (may take 2-3 minutes for ALB DNS to appear)
+kubectl get ingress -n retail-app -o wide
+
+# Wait for ALB DNS name to be provisioned
+kubectl get ingress retail-app -n retail-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+
+# If empty, wait a bit and retry
+sleep 30
+kubectl get ingress retail-app -n retail-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+
+# Get the ALB DNS name (final step)
+ALB_DNS=$(kubectl get ingress retail-app -n retail-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+echo "✓ Application URL: http://${ALB_DNS}"
+```
+
+## Phase 7: Test Application Accessibility
+
+```bash
+# Get ALB DNS name
+ALB_DNS=$(kubectl get ingress retail-app -n retail-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+# Test health endpoint
+curl -I http://${ALB_DNS}/health
+
+# Expected output: HTTP/1.1 200 OK
+
+# Access the application (open in browser or curl)
+curl http://${ALB_DNS}/ -s | head -20
+```
+
+## Phase 8: Verify Observability (CloudWatch Logs)
+
+### Control Plane Logs
+```bash
+# View EKS API logs
+aws logs tail /aws/eks/project-bedrock-cluster/api --follow
+
+# View EKS audit logs
+aws logs tail /aws/eks/project-bedrock-cluster/audit --follow
+```
+
+### Application Container Logs
+```bash
+# View container logs from CloudWatch
+aws logs tail /aws/eks/project-bedrock-cluster/container-logs --follow
+
+# OR view pod logs directly
+kubectl logs -n retail-app -l app=ui --tail=50 --follow
+
+# View logs from specific pod
+kubectl logs -n retail-app <pod-name> -c <container-name>
+```
+
+## Phase 9: Test Serverless Extension (S3-Lambda)
+
+```bash
+# Upload a test file to S3 (triggers Lambda)
+aws s3 cp test-image.jpg s3://bedrock-assets-alt-soe-025-3359/
+
+# Check Lambda logs (should see "Image received: test-image.jpg")
+aws logs tail /aws/lambda/bedrock-asset-processor --follow
+
+# Verify Lambda was invoked
+aws lambda get-function-configuration \
+  --function-name bedrock-asset-processor \
+  --query 'LastModified'
+```
+
+## Phase 10: Verify Developer Access (bedrock-dev-view)
+
+### AWS Console Access (Read-Only)
+The bedrock-dev-view user has:
+- ReadOnlyAccess to AWS Console
+- s3:PutObject permission on bedrock-assets-* bucket only
+
+### Kubernetes Access (Read-Only)
+The bedrock-dev-view user is mapped to the Kubernetes "view" ClusterRole:
+
+```bash
+# Test: bedrock-dev-view can READ pods (should succeed)
+# kubectl get pods -n retail-app
+
+# Test: bedrock-dev-view can WRITE to S3 (should succeed)
+# aws s3 cp file.txt s3://bedrock-assets-alt-soe-025-3359/
+
+# Test: bedrock-dev-view CANNOT delete pods (should fail with RBAC error)
+# kubectl delete pod <pod-name> -n retail-app
+# Expected: Error from server (Forbidden): pods is forbidden...
+```
+
+## Phase 11: Update grading.json with ALB DNS
+
+```bash
+# Get ALB DNS name
+ALB_DNS=$(kubectl get ingress retail-app -n retail-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+# Update grading.json with ALB DNS
+jq ".alb_dns_name = \"$ALB_DNS\"" ../grading.json > temp.json && mv temp.json ../grading.json
+
+# Verify final grading.json
+jq '{cluster_endpoint, cluster_name, region, vpc_id, assets_bucket_name, alb_dns_name}' ../grading.json
+```
+
+## Phase 12: Cleanup (CAUTION - Deletes all resources)
+
+```bash
+# Delete all Kubernetes resources
+kubectl delete -f k8s/
+kubectl delete namespace retail-app
+
+# Wait for namespace to be deleted
+kubectl wait --for delete namespace/retail-app --timeout=60s 2>/dev/null || true
+
+# Destroy all Terraform infrastructure
+cd terraform
+terraform destroy -auto-approve
+
+# Optional: Delete Terraform state bucket (one-time only)
+# aws s3 rm s3://karatu-terraform-state-jamesadewara --recursive
+# aws s3api delete-bucket --bucket karatu-terraform-state-jamesadewara
+```
+
+## Troubleshooting
+
+### Pods not starting
+```bash
+kubectl describe pod <pod-name> -n retail-app
+kubectl logs <pod-name> -n retail-app
+```
+
+### Database connection errors
+```bash
+# Verify secrets exist
+kubectl get secrets -n retail-app
+
+# Verify RDS security group allows traffic from EKS nodes
+aws ec2 describe-security-groups --group-ids <rds-sg-id>
+
+# Test database connectivity from pod
+kubectl exec -it <catalog-pod> -n retail-app -- bash
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASSWORD
+```
+
+### ALB not provisioning
+```bash
+# Check AWS Load Balancer Controller logs
+kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller --tail=50
+
+# Check ingress events
+kubectl describe ingress retail-app -n retail-app
+
+# Verify public subnets are tagged for ALB discovery
+aws ec2 describe-subnets \
+  --filters "Name=tag:kubernetes.io/role/elb,Values=1" \
+  --query 'Subnets[*].[SubnetId, Tags]'
+```
+
+### CloudWatch logs not appearing
+```bash
+# Verify CloudWatch Observability add-on pod
+kubectl get pods -n amazon-cloudwatch
+
+# Check CloudWatch add-on logs
+kubectl logs -n amazon-cloudwatch -l app=cloudwatch-observability --tail=20
+
+# Verify CloudWatch log groups were created
+aws logs describe-log-groups --log-group-name-prefix "/aws/eks/project-bedrock-cluster"
+```
+
+### Lambda not triggering on S3 upload
+```bash
+# Verify S3 event notification is configured
+aws s3api get-bucket-notification-configuration --bucket bedrock-assets-alt-soe-025-3359
+
+# Check Lambda permissions
+aws lambda get-policy --function-name bedrock-asset-processor
+
+# Test Lambda manually
+aws lambda invoke --function-name bedrock-asset-processor /tmp/response.json
+cat /tmp/response.json
+```
+
+## Useful Commands
+
+```bash
+# Get all resources in retail-app namespace
+kubectl get all -n retail-app
+
+# Stream logs from all pods
+kubectl logs -n retail-app --all-containers=true -f
+
+# Get detailed pod information
+kubectl get pods -n retail-app -o wide
+
+# Check cluster events
+kubectl get events --all-namespaces --sort-by='.lastTimestamp'
+
+# Test service connectivity
+kubectl exec -it <pod> -n retail-app -- curl http://catalog.retail-app.svc.cluster.local/health
+
+# Monitor CloudWatch logs in real-time
+aws logs tail /aws/eks/project-bedrock-cluster/container-logs --follow
+```
+
+---
+
+**Last Updated:** June 3, 2026

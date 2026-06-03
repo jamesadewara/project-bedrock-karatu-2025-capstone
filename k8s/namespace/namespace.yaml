@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: retail-app
+  labels:
+    app: retail-store
+    Project: karatu-2025-capstone

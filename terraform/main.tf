@@ -167,9 +167,6 @@ resource "kubernetes_secret" "catalog_db" {
   metadata {
     name      = "catalog-db-credentials"
     namespace = var.app_namespace
-    annotations = {
-      "helm.sh/resource-policy" = "keep"
-    }
   }
 
   data = {
@@ -188,9 +185,6 @@ resource "kubernetes_secret" "orders_db" {
   metadata {
     name      = "orders-db-credentials"
     namespace = var.app_namespace
-    annotations = {
-      "helm.sh/resource-policy" = "keep"
-    }
   }
 
   data = {
@@ -320,7 +314,6 @@ resource "aws_s3_bucket_notification" "assets" {
   lambda_function {
     lambda_function_arn = aws_lambda_function.asset_processor.arn
     events              = ["s3:ObjectCreated:*"]
-    filter_prefix       = "uploads/"
   }
 
   depends_on = [aws_lambda_permission.s3_invoke]
@@ -367,37 +360,4 @@ resource "aws_cloudwatch_log_group" "lambda" {
     ignore_changes = [name]  # Ignore if already exists
     prevent_destroy = false
   }
-}
-
-# ACM Certificate for the domain
-resource "aws_acm_certificate" "main" {
-  domain_name               = var.domain_name
-  validation_method         = "DNS"
-  subject_alternative_names = ["*.${var.domain_name}"]
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  tags = { Project = var.project_tag }
-}
-
-resource "null_resource" "namecheap_instructions" {
-  provisioner "local-exec" {
-    command = <<EOT
-echo "========================================================="
-echo "ACM Certificate ARN: ${aws_acm_certificate.main.arn}"
-echo "ACM Validation CNAME Records to add in Namecheap:"
-%{ for dvo in aws_acm_certificate.main.domain_validation_options ~}
-echo "  Name: ${dvo.resource_record_name}"
-echo "  Type: ${dvo.resource_record_type}"
-echo "  Value: ${dvo.resource_record_value}"
-%{ endfor ~}
-echo "Namecheap CNAME record for ALB pointing:"
-echo "  Add a CNAME record in Namecheap pointing to the ALB DNS Name."
-echo "========================================================="
-EOT
-  }
-
-  depends_on = [aws_acm_certificate.main]
 }

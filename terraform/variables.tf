@@ -77,12 +77,6 @@ variable "availability_zones" {
   default     = ["us-east-1a", "us-east-1b"]
 }
 
-variable "domain_name" {
-  description = "My Namecheap domain name for the retail store, Example: 'mydomain.com' or 'store.mydomain.com'"
-  type        = string
-  default     = "store.spatialdesign3d.site"
-}
-
 variable "vpc_cidr" {
   description = "VPC CIDR block"
   type        = string

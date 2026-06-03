@@ -243,42 +243,59 @@ resource "aws_iam_role_policy" "alb_controller" {
   })
 }
 
-# AWS Load Balancer Controller Helm Release
-resource "helm_release" "aws_load_balancer_controller" {
-  name       = "aws-load-balancer-controller"
-  repository = "https://aws.github.io/eks-charts"
-  chart      = "aws-load-balancer-controller"
-  namespace  = "kube-system"
+# AWS Load Balancer Controller - IAM role & policy created
+# NOTE: Deployment is via kubectl manifests in k8s/aws-load-balancer-controller/ (kubectl-only approach)
+# The IAM role above provides IRSA permissions for the controller pods
 
-  set {
-    name  = "clusterName"
-    value = aws_eks_cluster.main.name
-  }
+# CloudWatch Observability Add-on for Container Logging
+resource "aws_eks_addon" "cloudwatch_observability" {
+  cluster_name             = aws_eks_cluster.main.name
+  addon_name               = "amazon-cloudwatch-observability"
+  service_account_role_arn = aws_iam_role.cloudwatch_observability.arn
+  preserve                 = false
 
-  set {
-    name  = "vpcId"
-    value = var.vpc_id
-  }
+  depends_on = [aws_eks_node_group.main]
 
-  set {
-    name  = "serviceAccount.create"
-    value = "true"
-  }
+  tags = var.common_tags
+}
 
-  set {
-    name  = "serviceAccount.name"
-    value = "aws-load-balancer-controller"
-  }
+# IAM Role for CloudWatch Observability Add-on (IRSA)
+resource "aws_iam_role" "cloudwatch_observability" {
+  name = "${var.cluster_name}-cloudwatch-observability-role"
 
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = aws_iam_role.alb_controller.arn
-  }
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.eks.arn
+      }
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:amazon-cloudwatch:cloudwatch-observability-sa"
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
 
-  depends_on = [
-    aws_eks_node_group.main,
-    aws_iam_role_policy.alb_controller
-  ]
+  tags = var.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "cloudwatch_observability" {
+  role       = aws_iam_role.cloudwatch_observability.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
+# CloudWatch Log Group for container logs
+resource "aws_cloudwatch_log_group" "container_logs" {
+  name              = "/aws/eks/${var.cluster_name}/container-logs"
+  retention_in_days = 7
+
+  tags = var.common_tags
+
+  depends_on = [aws_eks_cluster.main]
 }
 
 # Create Application Namespace
