@@ -84,8 +84,8 @@ output "acm_validation_cname_records" {
 }
 
 output "alb_dns_name" {
-  description = "Application Load Balancer DNS Name"
-  value       = "Run this command to get the ALB DNS: kubectl get ingress -n ${var.app_namespace}"
+  description = "Run this command to get ALB DNS after Helm deploy"
+  value       = "kubectl get ingress -n ${var.app_namespace} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}'"
 }
 
 output "domain_name" {

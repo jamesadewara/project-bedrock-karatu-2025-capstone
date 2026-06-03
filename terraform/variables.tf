@@ -80,7 +80,7 @@ variable "availability_zones" {
 variable "domain_name" {
   description = "My Namecheap domain name for the retail store, Example: 'mydomain.com' or 'store.mydomain.com'"
   type        = string
-  default     = "spatialdesign3d.site"
+  default     = "store.spatialdesign3d.site"
 }
 
 variable "vpc_cidr" {

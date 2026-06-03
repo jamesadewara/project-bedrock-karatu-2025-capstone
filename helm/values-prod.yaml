@@ -79,7 +79,7 @@ carts:
     create: true
     name: carts
     annotations:
-      eks.amazonaws.com/role-arn: "arn:aws:iam::YOUR_ACCOUNT_ID:role/bedrock-carts-dynamodb-role"
+      eks.amazonaws.com/role-arn: "arn:aws:iam::839026370596:role/bedrock-carts-dynamodb-role"
   service:
     type: ClusterIP
     port: 80

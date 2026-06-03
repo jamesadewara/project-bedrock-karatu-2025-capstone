@@ -143,7 +143,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow" {
   tags              = var.common_tags
 
   lifecycle {
-    ignore_changes = [name]  # Ignore if already exists
+    ignore_changes = [name, retention_in_days]  # Ignore if already exists
     prevent_destroy = false
   }
 }

@@ -142,14 +142,6 @@ resource "aws_eks_node_group" "main" {
   tags = var.common_tags
 }
 
-# CloudWatch Observability EKS Add-on
-resource "aws_eks_addon" "cloudwatch_observability" {
-  cluster_name = aws_eks_cluster.main.name
-  addon_name   = "amazon-cloudwatch-observability"
-
-  depends_on = [aws_eks_node_group.main]
-}
-
 # AWS Load Balancer Controller Service Account
 resource "aws_iam_role" "alb_controller" {
   name = "${var.cluster_name}-alb-controller-role"
