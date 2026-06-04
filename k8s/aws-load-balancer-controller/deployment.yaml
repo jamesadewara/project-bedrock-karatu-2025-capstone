@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/name: aws-load-balancer-controller
     app.kubernetes.io/version: v2.7.0
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: aws-load-balancer-controller
@@ -36,11 +36,12 @@ spec:
           - name: webhook
             containerPort: 9443
         resources:
-          limits:
-            memory: 200Mi
           requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
             cpu: 100m
-            memory: 50Mi
+            memory: 128Mi
         livenessProbe:
           exec:
             command:

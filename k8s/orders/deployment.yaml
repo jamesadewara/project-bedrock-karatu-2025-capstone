@@ -20,7 +20,7 @@ spec:
       serviceAccountName: default
       containers:
       - name: orders
-        image: public.ecr.aws/aws-containers/retail-store-sample-orders:latest
+        image: public.ecr.aws/aws-containers/retail-store-sample-orders:0.6.0
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
@@ -58,11 +58,11 @@ spec:
               key: password
         resources:
           requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
             memory: "256Mi"
             cpu: "200m"
-          limits:
-            memory: "512Mi"
-            cpu: "400m"
         livenessProbe:
           httpGet:
             path: /health

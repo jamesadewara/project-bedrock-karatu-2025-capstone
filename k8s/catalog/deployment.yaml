@@ -20,7 +20,7 @@ spec:
       serviceAccountName: default
       containers:
       - name: catalog
-        image: public.ecr.aws/aws-containers/retail-store-sample-catalog:latest
+        image: public.ecr.aws/aws-containers/retail-store-sample-catalog:0.6.0
         imagePullPolicy: IfNotPresent
         ports:
         - name: http

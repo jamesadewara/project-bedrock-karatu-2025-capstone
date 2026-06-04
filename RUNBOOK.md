@@ -12,43 +12,37 @@
 cd terraform
 
 # Step 1a: Download AWS Load Balancer Controller IAM Policy
-# The ALB controller needs permissions to create and manage Application Load Balancers on your behalf.
-# Download the official AWS policy file to the local modules/eks directory:
 curl -s https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json \
   > modules/eks/alb_controller_policy.json
 
-echo "✓ ALB controller policy downloaded to modules/eks/alb_controller_policy.json"
+echo "✓ ALB controller policy downloaded"
 
-# Step 1b: Create S3 bucket for Terraform state (one-time setup)
+# Step 1b: Download ALB controller Helm chart locally
+mkdir -p modules/eks/charts
+helm repo add eks https://aws.github.io/eks-charts
+helm pull eks/aws-load-balancer-controller --untar --untardir modules/eks/charts
+
+echo "✓ ALB controller Helm chart downloaded"
+
+# Step 1c: Provision infrastructure (one-time setup)
 aws s3api create-bucket \
   --bucket karatu-terraform-state-jamesadewara \
   --region us-east-1
 
-# Enable versioning on state bucket
 aws s3api put-bucket-versioning \
   --bucket karatu-terraform-state-jamesadewara \
   --versioning-configuration Status=Enabled
 
-mkdir -p terraform/modules/eks/charts
-helm repo add eks https://aws.github.io/eks-charts
-helm pull eks/aws-load-balancer-controller --untar --untardir terraform/modules/eks/charts
-
-# Initialize Terraform with S3 backend
 terraform init
-
-# Review planned infrastructure
 terraform plan
-
-# Apply infrastructure (creates VPC, EKS, RDS, DynamoDB, Lambda, S3, CloudWatch add-on, etc.)
 terraform apply -auto-approve
 
-# Generate grading.json (CRITICAL - required for grading)
-terraform output -json > ../grading.json
+echo "✓ Infrastructure provisioned"
 
-# Verify Terraform outputs contain all 5 required values
+# Step 1d: Save outputs and retrieve Account ID
+terraform output -json > ../grading.json
 terraform output -json | jq '{cluster_endpoint, cluster_name, region, vpc_id, assets_bucket_name}'
 
-# Get your AWS Account ID (needed for Kubernetes manifests)
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 echo "AWS Account ID: $ACCOUNT_ID"
 ```
@@ -65,27 +59,21 @@ aws eks update-kubeconfig \
 kubectl cluster-info
 kubectl get nodes
 
-# Verify AWS Load Balancer Controller is deployed (via Helm in kube-system namespace)
+# Verify key infrastructure components are deployed
 kubectl get deployment -n kube-system aws-load-balancer-controller
-kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
-
-# Verify FluentBit is deployed for CloudWatch container logging
 kubectl get pods -n amazon-cloudwatch -l app.kubernetes.io/name=aws-for-fluent-bit
+kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-node
 
-# Verify EKS control plane logs are being captured
-aws logs describe-log-groups --log-group-name-prefix "/aws/eks/project-bedrock-cluster" --query 'logGroups[*].logGroupName'
+echo "✓ Cluster access verified"
 ```
 
-## Phase 3: Prepare Kubernetes Secrets
+## Phase 3: Verify Kubernetes Secrets
 
-Terraform already created the Kubernetes secrets in the retail-app namespace:
-- `catalog-db-credentials` (RDS MySQL credentials)
-- `orders-db-credentials` (RDS PostgreSQL credentials)
+Terraform created the database credentials in the retail-app namespace:
 
-Verify secrets exist:
 ```bash
+# Verify secrets exist
 kubectl get secrets -n retail-app
-kubectl describe secret catalog-db-credentials -n retail-app
 ```
 
 ## Phase 4: Update Carts ServiceAccount with Your AWS Account ID
@@ -106,27 +94,25 @@ grep "role-arn" k8s/carts/serviceaccount.yaml
 
 ## Phase 5: Deploy Application (kubectl manifests)
 
-Deploy all Kubernetes resources from the k8s/ directory (organized by component):
-
 ```bash
-# Deploy all components
+# Ensure you're in the project root directory
+cd $(git rev-parse --show-toplevel) 2>/dev/null || cd ..
+
+# Deploy namespace first (prerequisite for all other resources)
+kubectl apply -f k8s/namespace/
+
+# Deploy all components recursively (safe after namespace exists)
 kubectl apply -R -f k8s/
-# Build the namespace first using your file
-kubectl apply -f k8s/namespace/namespace.yaml
-# Verify all resources are created
-kubectl get pods -n retail-app
-kubectl get svc -n retail-app
-kubectl get ingress -n retail-app
+
+echo "✓ Application resources deployed"
 
 # Wait for all deployments to be ready (may take 2-3 minutes)
 kubectl wait --for=condition=available deployment --all -n retail-app --timeout=300s
 
-# Check pod status
+# Verify deployment status
 kubectl get pods -n retail-app -o wide
-
-# View pod logs to ensure services are starting correctly
-kubectl logs -n retail-app -l app=ui --tail=50
-kubectl logs -n retail-app -l app=catalog --tail=50
+kubectl get svc -n retail-app
+kubectl get ingress -n retail-app
 ```
 
 ## Phase 6: Verify ALB is Provisioned
@@ -134,17 +120,11 @@ kubectl logs -n retail-app -l app=catalog --tail=50
 The AWS Load Balancer Controller creates an Application Load Balancer when the Ingress is applied.
 
 ```bash
-# Check ingress status (may take 2-3 minutes for ALB DNS to appear)
-kubectl get ingress -n retail-app -o wide
+# Wait for ALB DNS name to be provisioned (may take 2-3 minutes)
+kubectl wait --for=jsonpath='{.status.loadBalancer.ingress[0].hostname}' \
+  ingress/retail-app -n retail-app --timeout=300s
 
-# Wait for ALB DNS name to be provisioned
-kubectl get ingress retail-app -n retail-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
-
-# If empty, wait a bit and retry
-sleep 30
-kubectl get ingress retail-app -n retail-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
-
-# Get the ALB DNS name (final step)
+# Get the ALB DNS name
 ALB_DNS=$(kubectl get ingress retail-app -n retail-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 echo "✓ Application URL: http://${ALB_DNS}"
 ```
@@ -159,32 +139,16 @@ ALB_DNS=$(kubectl get ingress retail-app -n retail-app -o jsonpath='{.status.loa
 curl -I http://${ALB_DNS}/health
 
 # Expected output: HTTP/1.1 200 OK
-
-# Access the application (open in browser or curl)
-curl http://${ALB_DNS}/ -s | head -20
 ```
 
 ## Phase 8: Verify Observability (CloudWatch Logs)
 
-### Control Plane Logs
 ```bash
-# View EKS API logs
+# View container logs shipped by FluentBit
+aws logs tail /aws/eks/project-bedrock-cluster/containers --follow
+
+# View EKS control plane logs (API, audit, etc.)
 aws logs tail /aws/eks/project-bedrock-cluster/api --follow
-
-# View EKS audit logs
-aws logs tail /aws/eks/project-bedrock-cluster/audit --follow
-```
-
-### Application Container Logs
-```bash
-# View container logs from CloudWatch
-aws logs tail /aws/eks/project-bedrock-cluster/container-logs --follow
-
-# OR view pod logs directly
-kubectl logs -n retail-app -l app=ui --tail=50 --follow
-
-# View logs from specific pod
-kubectl logs -n retail-app <pod-name> -c <container-name>
 ```
 
 ## Phase 9: Test Serverless Extension (S3-Lambda)
@@ -227,31 +191,38 @@ The bedrock-dev-view user is mapped to the Kubernetes "view" ClusterRole:
 ## Phase 11: Update grading.json with ALB DNS
 
 ```bash
+# Ensure you're in the project root directory
+cd $(git rev-parse --show-toplevel) 2>/dev/null || cd ..
+
 # Get ALB DNS name
 ALB_DNS=$(kubectl get ingress retail-app -n retail-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 
 # Update grading.json with ALB DNS
-jq ".alb_dns_name = \"$ALB_DNS\"" ../grading.json > temp.json && mv temp.json ../grading.json
+jq ".alb_dns_name = \"$ALB_DNS\"" grading.json > grading.json.tmp && mv grading.json.tmp grading.json
 
 # Verify final grading.json
-jq '{cluster_endpoint, cluster_name, region, vpc_id, assets_bucket_name, alb_dns_name}' ../grading.json
+jq '{cluster_endpoint, cluster_name, region, vpc_id, assets_bucket_name, alb_dns_name}' grading.json
 ```
 
 ## Phase 12: Cleanup (CAUTION - Deletes all resources)
 
 ```bash
-# Delete all Kubernetes resources
-kubectl delete -f k8s/
-kubectl delete namespace retail-app
+# Ensure you're in the project root directory
+cd $(git rev-parse --show-toplevel) 2>/dev/null || cd ..
 
-# Wait for namespace to be deleted
-kubectl wait --for delete namespace/retail-app --timeout=60s 2>/dev/null || true
+# Delete all Kubernetes resources and namespace
+kubectl delete -R -f k8s/
+kubectl delete namespace retail-app --wait=false
+
+echo "✓ Kubernetes resources deleted"
 
 # Destroy all Terraform infrastructure
 cd terraform
 terraform destroy -auto-approve
 
-# Optional: Delete Terraform state bucket (one-time only)
+echo "✓ Infrastructure destroyed"
+
+# Optional: Delete Terraform state bucket (one-time only, if no longer needed)
 # aws s3 rm s3://karatu-terraform-state-jamesadewara --recursive
 # aws s3api delete-bucket --bucket karatu-terraform-state-jamesadewara
 ```

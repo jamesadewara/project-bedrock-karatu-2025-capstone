@@ -20,7 +20,7 @@ spec:
       serviceAccountName: default
       containers:
       - name: assets
-        image: public.ecr.aws/aws-containers/retail-store-sample-assets:latest
+        image: public.ecr.aws/aws-containers/retail-store-sample-assets:0.6.0
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
