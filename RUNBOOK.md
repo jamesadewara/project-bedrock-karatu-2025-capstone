@@ -34,6 +34,12 @@ aws s3api put-bucket-versioning \
 
 terraform init
 terraform plan
+
+# IMPORTANT: Clean out any lingering webhooks from previous runs BEFORE applying
+# This prevents webhook conflicts if re-running after failed deployments
+kubectl delete mutatingwebhookconfiguration aws-load-balancer-webhook-configuration --ignore-not-found 2>/dev/null || true
+kubectl delete validatingwebhookconfiguration aws-load-balancer-webhook-configuration --ignore-not-found 2>/dev/null || true
+
 terraform apply -auto-approve
 
 echo "✓ Infrastructure provisioned"
@@ -57,6 +63,9 @@ aws eks update-kubeconfig \
 # Verify cluster connectivity
 kubectl cluster-info
 kubectl get nodes
+# Cycle worker nodes so they pick up the active Prefix Delegation limits
+echo "Cycling nodes to apply Prefix Delegation..."
+kubectl rollout restart daemonset aws-node -n kube-system
 
 # Verify key infrastructure components are deployed
 kubectl get deployment -n kube-system aws-load-balancer-controller
@@ -80,6 +89,9 @@ kubectl get secrets -n retail-app
 The carts ServiceAccount uses IRSA (IAM Roles for Service Accounts) to access DynamoDB.
 
 ```bash
+# Ensure you're in the project root directory
+cd $(git rev-parse --show-toplevel) 2>/dev/null || cd ..
+
 # Get your AWS Account ID
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
@@ -89,6 +101,11 @@ sed -i "s|arn:aws:iam::.*:role/bedrock-carts-dynamodb-role|arn:aws:iam::${ACCOUN
 # Verify the replacement
 grep "role-arn" k8s/carts/serviceaccount.yaml
 # Should show: arn:aws:iam::YOUR_ACCOUNT_ID:role/bedrock-carts-dynamodb-role
+
+# NOTE: Carts image tag 0.6.0 may not be available in public.ecr.aws registry
+# If ImagePullBackOff occurs, try:
+#   - Using a different version tag (0.5.0, 0.4.0)
+#   - Or comment out the carts deployment in k8s/carts/ if not critical to your requirements
 ```
 
 ## Phase 5: Deploy Application (kubectl manifests)
@@ -97,22 +114,30 @@ grep "role-arn" k8s/carts/serviceaccount.yaml
 # Ensure you're in the project root directory
 cd $(git rev-parse --show-toplevel) 2>/dev/null || cd ..
 
-# Deploy namespace first (prerequisite for all other resources)
-kubectl apply -f k8s/namespace/
-
-# Deploy all components recursively (safe after namespace exists)
+# Deploy all application manifests recursively
 kubectl apply -R -f k8s/
 
 echo "✓ Application resources deployed"
 
-# Wait for all deployments to be ready (may take 2-3 minutes)
-kubectl wait --for=condition=available deployment --all -n retail-app --timeout=300s
-
-# Verify deployment status
+# Verify deployment status (do this first to see actual status)
 kubectl get pods -n retail-app -o wide
 kubectl get svc -n retail-app
 kubectl get ingress -n retail-app
+
+# NOTE: kubectl wait may hang indefinitely if deployments don't reach ready state
+# This can happen if:
+#   - Nodes don't have capacity (pending pods)
+#   - Pod images fail to pull (ImagePullBackOff)
+#   - Pods crash on startup (CrashLoopBackOff)
+# In such cases, investigate with: kubectl describe pod <pod-name> -n retail-app
+# and: kubectl logs <pod-name> -n retail-app
+
+# Optionally wait for ALB ingress (less likely to timeout):
+kubectl wait --for=jsonpath='{.status.loadBalancer.ingress[0].hostname}' \
+  ingress/retail-app -n retail-app --timeout=300s || echo "⚠ ALB not provisioned yet"
 ```
+
+**Note:** The `retail-app` namespace is created and managed by Terraform (`terraform/modules/eks/main.tf`). All application manifests include `namespace: retail-app` in their metadata and automatically deploy into this namespace.
 
 ## Phase 6: Verify ALB is Provisioned
 
@@ -134,10 +159,22 @@ echo "✓ Application URL: http://${ALB_DNS}"
 # Get ALB DNS name
 ALB_DNS=$(kubectl get ingress retail-app -n retail-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
 
-# Test health endpoint
-curl -I http://${ALB_DNS}/health
+if [ -z "$ALB_DNS" ]; then
+  echo "⚠ ALB DNS not available yet. Check ingress status with: kubectl get ingress -n retail-app"
+else
+  echo "Testing ALB at: http://${ALB_DNS}"
+  
+  # Test health endpoint (may fail if pods not ready)
+  curl -I http://${ALB_DNS}/health || echo "⚠ Health endpoint not responding (pods may not be ready)"
+  
+  # If health fails, verify pods are running:
+  kubectl get pods -n retail-app -o wide
+fi
 
-# Expected output: HTTP/1.1 200 OK
+# NOTE: If curl fails:
+# - Check if pods are Running: kubectl get pods -n retail-app
+# - Check pod logs: kubectl logs -n retail-app <pod-name>
+# - Check ALB target health: aws elbv2 describe-target-health --target-group-arn <arn>
 ```
 
 ## Phase 8: Verify Observability (CloudWatch Logs)
@@ -153,16 +190,30 @@ aws logs tail /aws/eks/project-bedrock-cluster/api --follow
 ## Phase 9: Test Serverless Extension (S3-Lambda)
 
 ```bash
-# Upload a test file to S3 (triggers Lambda)
-aws s3 cp test-image.jpg s3://bedrock-assets-alt-soe-025-3359/
+# Get the actual S3 bucket name (from terraform outputs)
+BUCKET_NAME=$(terraform output -raw assets_bucket_name 2>/dev/null)
 
-# Check Lambda logs (should see "Image received: test-image.jpg")
+if [ -z "$BUCKET_NAME" ]; then
+  echo "⚠ Could not retrieve bucket name from terraform. Check terraform outputs:"
+  terraform output assets_bucket_name
+  exit 1
+fi
+
+# Upload a test file to S3 (triggers Lambda)
+echo "Uploading test file to s3://${BUCKET_NAME}/"
+echo "test content" > test-file.txt
+aws s3 cp test-file.txt s3://${BUCKET_NAME}/
+
+# Check Lambda logs (should see invocation)
 aws logs tail /aws/lambda/bedrock-asset-processor --follow
 
 # Verify Lambda was invoked
 aws lambda get-function-configuration \
   --function-name bedrock-asset-processor \
   --query 'LastModified'
+  
+# Cleanup
+rm -f test-file.txt
 ```
 
 ## Phase 10: Verify Developer Access (bedrock-dev-view)
@@ -209,13 +260,12 @@ jq '{cluster_endpoint, cluster_name, region, vpc_id, assets_bucket_name, alb_dns
 # Ensure you're in the project root directory
 cd $(git rev-parse --show-toplevel) 2>/dev/null || cd ..
 
-# Delete all Kubernetes resources and namespace
-kubectl delete -R -f k8s/
-kubectl delete namespace retail-app --wait=false
+# Delete all Kubernetes application resources
+kubectl delete -R -f k8s/ --ignore-not-found
 
-echo "✓ Kubernetes resources deleted"
+echo "✓ Application resources deleted"
 
-# Destroy all Terraform infrastructure
+# Destroy all Terraform infrastructure (will also delete the retail-app namespace)
 cd terraform
 terraform destroy -auto-approve
 
@@ -226,25 +276,59 @@ echo "✓ Infrastructure destroyed"
 # aws s3api delete-bucket --bucket karatu-terraform-state-jamesadewara
 ```
 
+**Note:** The `retail-app` namespace is managed by Terraform and will be automatically deleted as part of `terraform destroy`.
+
 ## Troubleshooting
 
-### Pods not starting
+### Pods not starting / stuck in Pending
 ```bash
+# Check pod scheduling status
 kubectl describe pod <pod-name> -n retail-app
-kubectl logs <pod-name> -n retail-app
+
+# Common cause: Not enough node capacity
+# Check node resource usage:
+kubectl top nodes
+kubectl top pods -n retail-app
+
+# If nodes at capacity, increase desired node count:
+aws eks update-nodegroup-config \
+  --cluster-name project-bedrock-cluster \
+  --nodegroup-name project-bedrock-cluster-nodes \
+  --scaling-config desiredSize=15,minSize=2,maxSize=20
 ```
 
-### Database connection errors
+### Pods crashing (CrashLoopBackOff)
 ```bash
-# Verify secrets exist
+# Get detailed pod events
+kubectl describe pod <pod-name> -n retail-app
+
+# View pod logs
+kubectl logs <pod-name> -n retail-app --previous  # Shows last run's logs
+kubectl logs <pod-name> -n retail-app              # Shows current logs
+
+# Common issues:
+# - Migrations failing (catalog): Database connectivity or RDS timeout
+# - Image not found (carts): Invalid image tag in ECR
+# - Missing config/secrets: Check if secrets exist with kubectl get secrets -n retail-app
+```
+
+### Database connection errors (timeout)
+```bash
+# 1. Verify secrets exist and contain correct endpoints
 kubectl get secrets -n retail-app
+kubectl get secret catalog-db-credentials -n retail-app -o yaml
 
-# Verify RDS security group allows traffic from EKS nodes
-aws ec2 describe-security-groups --group-ids <rds-sg-id>
+# 2. Verify RDS security group allows traffic from EKS nodes
+SECURITY_GROUP=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=*rds*" --query 'SecurityGroups[0].GroupId' --output text)
+aws ec2 describe-security-groups --group-ids $SECURITY_GROUP
 
-# Test database connectivity from pod
-kubectl exec -it <catalog-pod> -n retail-app -- bash
-mysql -h $DB_HOST -u $DB_USER -p$DB_PASSWORD
+# 3. Test database connectivity from pod
+kubectl exec -it $(kubectl get pods -n retail-app -l app=catalog -o jsonpath='{.items[0].metadata.name}') -n retail-app -- bash
+mysql -h $DB_HOST -u $DB_USER -p$DB_PASSWORD -e "SELECT 1;"
+
+# 4. If migrations timeout, increase the deployment's timeout or disable migrations
+kubectl set env deployment/catalog DB_MIGRATION_DISABLE=true -n retail-app
+kubectl rollout restart deployment/catalog -n retail-app
 ```
 
 ### ALB not provisioning
@@ -275,8 +359,11 @@ aws logs describe-log-groups --log-group-name-prefix "/aws/eks/project-bedrock-c
 
 ### Lambda not triggering on S3 upload
 ```bash
+# Get bucket name from terraform
+BUCKET_NAME=$(terraform output -raw assets_bucket_name)
+
 # Verify S3 event notification is configured
-aws s3api get-bucket-notification-configuration --bucket bedrock-assets-alt-soe-025-3359
+aws s3api get-bucket-notification-configuration --bucket $BUCKET_NAME
 
 # Check Lambda permissions
 aws lambda get-policy --function-name bedrock-asset-processor
@@ -284,6 +371,22 @@ aws lambda get-policy --function-name bedrock-asset-processor
 # Test Lambda manually
 aws lambda invoke --function-name bedrock-asset-processor /tmp/response.json
 cat /tmp/response.json
+```
+
+### Carts ImagePullBackOff - Image not found
+```bash
+# The public.ecr.aws image may not exist with tag 0.6.0
+# Options:
+# 1. Try different version:
+sed -i 's|:0.6.0|:0.5.0|g' k8s/carts/deployment.yaml
+kubectl apply -f k8s/carts/deployment.yaml
+
+# 2. Or disable carts deployment if not critical:
+kubectl delete deployment carts -n retail-app
+
+# 3. Check what tags are available (if accessible):
+aws ecr describe-images --repository-name aws-containers/retail-store-sample-carts \
+  --registry-id public --region us-east-1
 ```
 
 ## Useful Commands
@@ -296,7 +399,7 @@ kubectl get all -n retail-app
 kubectl logs -n retail-app --all-containers=true -f
 
 # Get detailed pod information
-kubectl get pods -n retail-app -o wide
+kubectl get pods -n retail-app -o wide -w # check in real time
 
 # Check cluster events
 kubectl get events --all-namespaces --sort-by='.lastTimestamp'
@@ -310,4 +413,19 @@ aws logs tail /aws/eks/project-bedrock-cluster/container-logs --follow
 
 ---
 
-**Last Updated:** June 3, 2026
+## Free Tier Considerations
+
+This project uses AWS Free Tier resources:
+- **EKS Cluster**: No charge for control plane
+- **EC2 Nodes**: t3.micro/t2.micro (750 hours/month free)
+- **RDS**: 750 hours/month free (MySQL 8.0, PostgreSQL 16.3)
+- **ALB**: Partial free tier (730 hours/month)
+- **S3**: 5GB storage free
+- **Lambda**: 1 million requests/month free
+- **CloudWatch Logs**: 5GB ingestion free
+
+⚠️ **Scaling caveat**: The Free Tier account may have limits preventing scaling beyond 6-8 small instances. If you need more capacity, upgrade to a paid account or request a limit increase from AWS Support.
+
+---
+
+**Last Updated:** June 4, 2026
