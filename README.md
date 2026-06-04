@@ -1,7 +1,6 @@
 # Project Bedrock - EKS Microservices with Managed Data Layer
 
-A production-grade Kubernetes deployment on AWS EKS featuring a retail microservices application with managed AWS data services (RDS, DynamoDB), in-cluster messaging (RabbitMQ), and in-cluster caching (Redis).
-
+A production-grade Kubernetes deployment on AWS EKS featuring a retail microservices application with managed AWS data services (RDS, DynamoDB), in-cluster messaging (RabbitMQ), and in-cluster caching (Redis)
 ## Overview
 
 **Project Bedrock** implements a complete cloud-native architecture using:
