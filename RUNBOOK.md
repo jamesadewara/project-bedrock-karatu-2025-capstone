@@ -9,7 +9,7 @@
 ## Phase 1: Infrastructure Provisioning (Terraform)
 
 ```bash
-cd terraform
+cd terraform 
 # Step 1a: Download AWS Load Balancer Controller IAM Policy
 curl -s https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json \
   > modules/eks/alb_controller_policy.json
