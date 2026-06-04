@@ -160,9 +160,9 @@ resource "aws_eks_node_group" "main" {
   capacity_type  = "ON_DEMAND"
 
   scaling_config {
-    desired_size = 4  # Bumped from 2 to 4 to give the Retail App enough total aggregate RAM
+    desired_size = 6  # Bumped from 4 to 6 to let fresh nodes take on the workloads
     min_size     = 2
-    max_size     = 5 # Fixed to prevent accidental scaling costs
+    max_size     = 8  # Bumped from 5 to 8 to give the scheduler scaling headroom
   }
 
   update_config {
