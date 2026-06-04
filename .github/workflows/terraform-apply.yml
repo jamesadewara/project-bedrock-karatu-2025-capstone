@@ -15,7 +15,7 @@ on:
 permissions:
   id-token: write       # Required for OIDC
   contents: write       # Required to commit grading.json
-  issues: writ         # Required to create failure issues
+  issues: write         # Required to create failure issues
 
 env:
   TF_IN_AUTOMATION: true
