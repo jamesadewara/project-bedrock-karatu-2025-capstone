@@ -248,6 +248,13 @@ kubectl exec -it <pod-name> -n retail-app -- \
   mysql -h <db-host> -u <db-user> -p<db-password> -e "SELECT VERSION();"
 ```
 
+### AWS Service Quotas - vCPU Limit
+If pods remain in Pending state with "Too many pods" messages:
+1. Go to [AWS Service Quotas Console](https://console.aws.amazon.com/servicequotas)
+2. Search: "EC2 On-Demand Standard instances"
+3. Request quota increase to 32 vCPUs
+4. After approval, scale node group to desired size
+
 ## Cleanup
 
 To destroy all resources and cleanup:
@@ -260,6 +267,10 @@ kubectl delete -f k8s/
 cd terraform
 terraform destroy
 ```
+
+## AWS Service Quotas - vCPU Limit Increase
+
+The default AWS Free Tier account allows **8 vCPUs** for On-Demand t3/t2 instances. The Project Bedrock infrastructure initially provisions 6 EC2 nodes (t3.micro), which already uses 12 vCPUs—exceeding the Free Tier limit by 50%. **To deploy the full application stack, you must request a vCPU Limit Increase** through AWS Service Quotas for **Amazon Elastic Compute Cloud (Amazon EC2)** → **Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances**. Request an increase to **32 vCPUs** to allow full cluster scaling. The request typically approves within hours. Once approved, scale the EKS node group: `aws eks update-nodegroup-config --cluster-name project-bedrock-cluster --nodegroup-name project-bedrock-cluster-nodes --scaling-config desiredSize=6,minSize=2,maxSize=15 --region us-east-1`. This enables all application pods to schedule across the cluster.
 
 ## Project Constraints
 

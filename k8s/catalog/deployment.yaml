@@ -48,6 +48,8 @@ spec:
             secretKeyRef:
               name: catalog-db-credentials
               key: dbname
+        - name: DB_MIGRATION_DISABLE
+          value: "true"
         resources:
           requests:
             memory: "128Mi"
