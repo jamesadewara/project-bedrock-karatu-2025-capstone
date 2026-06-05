@@ -20,7 +20,7 @@ spec:
       serviceAccountName: carts
       containers:
       - name: carts
-        image: public.ecr.aws/aws-containers/retail-store-sample-carts:0.5.0
+        image: public.ecr.aws/aws-containers/retail-store-sample-carts:0.6.0
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
