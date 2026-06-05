@@ -125,28 +125,29 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private[count.index].id
 }
 
-# VPC Flow Logs (for observability)
-resource "aws_flow_log" "main" {
-  vpc_id                   = aws_vpc.main.id
-  traffic_type             = "ALL"
-  log_destination_type     = "cloud-watch-logs"
-  log_destination          = aws_cloudwatch_log_group.vpc_flow.arn
-  iam_role_arn             = aws_iam_role.vpc_flow_logs.arn
-  max_aggregation_interval = 60
-
-  tags = var.common_tags
-}
-
-resource "aws_cloudwatch_log_group" "vpc_flow" {
-  name              = "/aws/vpc/${var.name}-flow-logs"
-  retention_in_days = 7
-  tags              = var.common_tags
-
-  lifecycle {
-    ignore_changes = [name, retention_in_days]  # Ignore if already exists
-    prevent_destroy = false
-  }
-}
+# VPC Flow Logs (for observability) - DISABLED due to state synchronization issues
+# These are optional for the project and can be re-enabled by uncommenting
+# resource "aws_flow_log" "main" {
+#   vpc_id                   = aws_vpc.main.id
+#   traffic_type             = "ALL"
+#   log_destination_type     = "cloud-watch-logs"
+#   log_destination          = aws_cloudwatch_log_group.vpc_flow.arn
+#   iam_role_arn             = aws_iam_role.vpc_flow_logs.arn
+#   max_aggregation_interval = 60
+#
+#   tags = var.common_tags
+# }
+#
+# resource "aws_cloudwatch_log_group" "vpc_flow" {
+#   name              = "/aws/vpc/${var.name}-flow-logs"
+#   retention_in_days = 7
+#   tags              = var.common_tags
+#
+#   lifecycle {
+#     ignore_changes = [name, retention_in_days]  # Ignore if already exists
+#     prevent_destroy = false
+#   }
+# }
 
 resource "aws_iam_role" "vpc_flow_logs" {
   name = "${var.name}-vpc-flow-logs-role"

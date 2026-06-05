@@ -20,6 +20,7 @@ permissions:
 env:
   TF_IN_AUTOMATION: true
   AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
 jobs:
   terraform-apply:
@@ -39,6 +40,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-account-id: ${{ env.AWS_ACCOUNT_ID }}
           aws-region: us-east-1
           role-session-name: GitHubActions-Terraform-Apply
 
