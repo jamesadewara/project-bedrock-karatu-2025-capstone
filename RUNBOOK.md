@@ -419,10 +419,6 @@ This project uses AWS Free Tier resources:
 
 ⚠️ **Scaling caveat**: The Free Tier account may have limits preventing scaling beyond 6-8 small instances. If you need more capacity, upgrade to a paid account or request a limit increase from AWS Support.
 
----
-
-## Code Quality & Security Review (June 5, 2026)
-
 A comprehensive code review has been completed. See [CODE_REVIEW.md](CODE_REVIEW.md) for full details.
 
 ### Critical Issues Fixed
@@ -452,9 +448,3 @@ db_recovery_window_in_days = 30  # 7 is minimum
 # backup_retention_period = 7  # Currently 1 day
 # skip_final_snapshot = false  # Currently true
 ```
-
-**See [CODE_REVIEW.md](CODE_REVIEW.md) for complete recommendations.**
-
----
-
-**Last Updated:** June 5, 2026
