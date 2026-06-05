@@ -42,12 +42,12 @@ jobs:
       - name: Verify AWS Credentials
         run: aws sts get-caller-identity
 
-      # Step 4: Setup Terraform
+      # Step 4: Setup Terraform (FIXED: wrapper set to true to capture outputs)
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.10.0"
-          terraform_wrapper: false
+          terraform_wrapper: true
 
       # Step 5: Terraform Format Check
       - name: Terraform Format
@@ -71,7 +71,7 @@ jobs:
         run: terraform plan -no-color -input=false -out=tfplan
         continue-on-error: true
 
-      # Step 9: Post Plan to PR Comment (FIXED: proper output handling)
+      # Step 9: Post Plan to PR Comment
       - name: Post Plan to PR
         uses: actions/github-script@v7
         if: github.event_name == 'pull_request'
@@ -92,24 +92,28 @@ jobs:
             const validateOutcome = process.env.VALIDATE_OUTCOME;
             const planOutcome = process.env.PLAN_OUTCOME;
 
+            // Optional: Truncate plan if it exceeds GitHub comment character limit (~65k characters)
+            const maxLen = 60000;
+            const formattedPlan = plan.length > maxLen ? `${plan.substring(0, maxLen)}\n\n...Plan truncated due to length limits...` : plan;
+
             const output = `## Terraform Plan Results
 
             ### Status Summary
-            - **Format Check**: ${fmtOutcome} 🖌️
-            - **Initialization**: ${initOutcome} ⚙️
-            - **Validation**: ${validateOutcome} 🤖
-            - **Plan**: ${planOutcome} 📖
+            - **Format Check**: \`${fmtOutcome}\` 🖌️
+            - **Initialization**: \`${initOutcome}\` ⚙️
+            - **Validation**: \`${validateOutcome}\` 🤖
+            - **Plan**: \`${planOutcome}\` 📖
 
             <details><summary>Show Plan Output</summary>
 
             \`\`\`terraform
-            ${plan}
+            ${formattedPlan}
             ${planErr}
             \`\`\`
 
             </details>
 
-            *Triggered by: @${{ github.actor }} | Event: ${{ github.event_name }}*`;
+            *Triggered by: @${{ github.actor }} | Event: \`${{ github.event_name }}\`*`;
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
