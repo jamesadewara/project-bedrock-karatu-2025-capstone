@@ -498,7 +498,7 @@ resource "aws_iam_role" "github_actions" {
           }
           StringLike = {
             # Restricts access strictly to your capstone repository
-            "token.actions.githubusercontent.com:sub" = "repo:project-bedrock-karatu-2025-capstone/*"
+            "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:*"
           }
         }
       }

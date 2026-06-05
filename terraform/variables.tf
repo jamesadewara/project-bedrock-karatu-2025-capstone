@@ -112,3 +112,9 @@ variable "domain_name" {
   type        = string
   default     = "spatialdesign3d.site"
 }
+
+variable "github_repo" {
+  description = "The GitHub repository in format owner/repo-name for OIDC trust role"
+  type        = string
+  default     = "jamesadewara/project-bedrock-karatu-2025-capstone"
+}
