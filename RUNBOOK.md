@@ -105,16 +105,6 @@ kubectl get secret -n retail-app catalog-db-credentials orders-db-credentials ra
 kubectl get svc -n retail-app catalog-db orders-db
 ```
 
-# Verify the replacement
-grep "role-arn" k8s/carts/serviceaccount.yaml
-# Should show: arn:aws:iam::YOUR_ACCOUNT_ID:role/bedrock-carts-dynamodb-role
-
-# NOTE: Carts image tag 0.6.0 may not be available in public.ecr.aws registry
-# If ImagePullBackOff occurs, try:
-#   - Using a different version tag (0.5.0, 0.4.0)
-#   - Or comment out the carts deployment in k8s/carts/ if not critical to your requirements
-```
-
 ## Phase 5: Deploy Application (kubectl manifests)
 
 ```bash
