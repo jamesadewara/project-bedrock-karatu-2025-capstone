@@ -65,15 +65,15 @@ spec:
             cpu: "200m"
         livenessProbe:
           httpGet:
-            path: /health
+            path: /actuator/health
             port: 8080
           initialDelaySeconds: 90
-          periodSeconds: 10
+          periodSeconds: 15
           failureThreshold: 5
         readinessProbe:
           httpGet:
-            path: /health
+            path: /actuator/health
             port: 8080
-          initialDelaySeconds: 60
+          initialDelaySeconds: 45
           periodSeconds: 10
           failureThreshold: 3
