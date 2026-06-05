@@ -26,6 +26,8 @@ spec:
         - name: http
           containerPort: 8080
         env:
+        - name: AWS_REGION
+          value: "us-east-1"
         - name: CATALOG_API_URL
           value: http://catalog.retail-app.svc.cluster.local
         - name: ORDERS_API_URL
@@ -38,20 +40,20 @@ spec:
           value: http://assets.retail-app.svc.cluster.local
         resources:
           requests:
-            memory: "128Mi"
-            cpu: "100m"
+            memory: "512Mi"
+            cpu: "500m"
           limits:
-            memory: "256Mi"
-            cpu: "200m"
+            memory: "1Gi"
+            cpu: "1000m"
         livenessProbe:
           httpGet:
             path: /actuator/health
             port: 8080
-          initialDelaySeconds: 60
+          initialDelaySeconds: 90
           periodSeconds: 15
         readinessProbe:
           httpGet:
             path: /actuator/health
             port: 8080
-          initialDelaySeconds: 30
+          initialDelaySeconds: 90
           periodSeconds: 10
