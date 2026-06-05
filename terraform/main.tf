@@ -348,9 +348,7 @@ resource "aws_iam_user_policy" "dev_s3_put" {
   })
 }
 
-# CLOUDWATCH - Control Plane Logging (Enabled in EKS Module)
-# Container Logging via EKS Add-on (in EKS Module)
-# Log Group for Lambda (already created by Lambda service, but we ensure retention)
+
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${var.lambda_function_name}"
   retention_in_days = 7
