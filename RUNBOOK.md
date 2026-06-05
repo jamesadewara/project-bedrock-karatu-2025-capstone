@@ -136,7 +136,97 @@ kubectl wait --for=jsonpath='{.status.loadBalancer.ingress[0].hostname}' \
 
 **Note:** The `retail-app` namespace is created and managed by Terraform (`terraform/modules/eks/main.tf`). All application manifests include `namespace: retail-app` in their metadata and automatically deploy into this namespace.
 
-## Phase 6: Verify ALB is Provisioned
+## Phase 6: Populate S3 Assets & Verify ALB is Provisioned
+
+### ⚠️ CRITICAL: S3 Asset Population MUST Run After Phase 5
+
+This is the most common failure point in the deployment. After you deploy the application in Phase 5, the S3 bucket is empty, which causes:
+- ❌ Assets pod fails to serve images
+- ❌ UI pod fails readiness probes
+- ❌ RabbitMQ pod fails readiness probes
+- ❌ All pods stuck at 0/1 Ready
+- ❌ ALB returns 503 Service Unavailable
+
+**Solution: Populate S3 bucket IMMEDIATELY after Phase 5 completes**
+
+### Step 6a: Download & Upload Official Retail Store Images (Recommended)
+
+This is the **official and recommended approach**. It downloads real product images from the AWS retail store sample app GitHub repository.
+
+#### Run the Automated Setup Script
+
+```bash
+# Make the script executable (first time only)
+chmod +x scripts/setup-images.sh
+
+# Run the setup script
+bash scripts/setup-images.sh
+```
+
+**What this script does:**
+1. ✅ Verifies AWS credentials and kubectl connectivity
+2. ✅ Creates/updates local `assets-images/` directory (ignored by git)
+3. ✅ Downloads official images from GitHub release (v1.2.1)
+4. ✅ Extracts all images locally
+5. ✅ Uploads everything to S3 bucket
+6. ✅ Restarts deployments (ui, assets, rabbitmq)
+
+**Expected output:**
+```
+Step 1: Verifying Prerequisites
+✅ AWS CLI installed
+✅ Download tool available: wget
+✅ kubectl installed
+✅ AWS Account ID: 123456789012
+✅ S3 bucket accessible: s3://bedrock-assets-alt-soe-025-3359/
+
+Step 2: Setting Up Local Assets Directory
+✅ Created assets directory: /home/WORKSPACE/project-bedrock-karatu-2025-capstone/assets-images
+
+Step 3: Downloading Official Retail Store Images
+📥 Downloading (wget)...
+✅ Download complete (Size: 4.5M)
+
+Step 4: Extracting Images
+✅ Extraction complete
+   Total images extracted: 47
+
+Step 5: Uploading Images to S3
+✅ Upload complete
+   Total files in S3: 47
+
+Step 7: Restarting Deployments
+✅ Deployment restart commands issued
+
+═══════════════════════════════════════════════════════════════════════════════
+                         SETUP COMPLETE ✅
+═══════════════════════════════════════════════════════════════════════════════
+
+Summary:
+  📁 Local images:     /home/WORKSPACE/.../assets-images (47 files)
+  ☁️  S3 bucket:        s3://bedrock-assets-alt-soe-025-3359/ (47 files)
+  🎯 Deployments:      Restarted (ui, assets, rabbitmq)
+```
+
+**Note:** The `assets-images/` directory is automatically ignored by `.gitignore`, so it won't be committed to the repository. You can safely re-run this script to update images.
+
+### Step 6b: Monitor Pod Recovery
+
+After running the setup script or manual upload commands:
+
+```bash
+# 1. Monitor pod transitions to Ready state
+kubectl get pods -n retail-app -l "app in (ui,rabbitmq,assets)" -w
+
+# 2. Expected timeline:
+# - 0-30s:  Pods show 0/1 Running (containers starting)
+# - 30-60s: Pods reach 1/1 Ready (readiness probes pass)
+# - 60s+:   Pods stable at 1/1 Running
+
+# 3. Exit watch with Ctrl+C
+```
+
+### Step 6c: Verify ALB is Provisioned
 
 The AWS Load Balancer Controller creates an Application Load Balancer when the Ingress is applied.
 
@@ -277,114 +367,20 @@ echo "✓ Infrastructure destroyed"
 
 ## Troubleshooting
 
-### Pods not starting / stuck in Pending
-```bash
-# Check pod scheduling status
-kubectl describe pod <pod-name> -n retail-app
+For comprehensive troubleshooting guidance, see [TROUBLESHOOT.md](TROUBLESHOOT.md).
 
-# Common cause: Not enough node capacity
-# Check node resource usage:
-kubectl top nodes
-kubectl top pods -n retail-app
-
-# If nodes at capacity, increase desired node count:
-aws eks update-nodegroup-config \
-  --cluster-name project-bedrock-cluster \
-  --nodegroup-name project-bedrock-cluster-nodes \
-  --scaling-config desiredSize=15,minSize=2,maxSize=20
-```
-
-### Pods crashing (CrashLoopBackOff)
-```bash
-# Get detailed pod events
-kubectl describe pod <pod-name> -n retail-app
-
-# View pod logs
-kubectl logs <pod-name> -n retail-app --previous  # Shows last run's logs
-kubectl logs <pod-name> -n retail-app              # Shows current logs
-
-# Common issues:
-# - Migrations failing (catalog): Database connectivity or RDS timeout
-# - Image not found (carts): Invalid image tag in ECR
-# - Missing config/secrets: Check if secrets exist with kubectl get secrets -n retail-app
-```
-
-### Database connection errors (timeout)
-```bash
-# 1. Verify secrets exist and contain correct endpoints
-kubectl get secrets -n retail-app
-kubectl get secret catalog-db-credentials -n retail-app -o yaml
-
-# 2. Verify RDS security group allows traffic from EKS nodes
-SECURITY_GROUP=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=*rds*" --query 'SecurityGroups[0].GroupId' --output text)
-aws ec2 describe-security-groups --group-ids $SECURITY_GROUP
-
-# 3. Test database connectivity from pod
-kubectl exec -it $(kubectl get pods -n retail-app -l app=catalog -o jsonpath='{.items[0].metadata.name}') -n retail-app -- bash
-mysql -h $DB_HOST -u $DB_USER -p$DB_PASSWORD -e "SELECT 1;"
-
-# 4. If migrations timeout, increase the deployment's timeout or disable migrations
-kubectl set env deployment/catalog DB_MIGRATION_DISABLE=true -n retail-app
-kubectl rollout restart deployment/catalog -n retail-app
-```
-
-### ALB not provisioning
-```bash
-# Check AWS Load Balancer Controller logs
-kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller --tail=50
-
-# Check ingress events
-kubectl describe ingress retail-app -n retail-app
-
-# Verify public subnets are tagged for ALB discovery
-aws ec2 describe-subnets \
-  --filters "Name=tag:kubernetes.io/role/elb,Values=1" \
-  --query 'Subnets[*].[SubnetId, Tags]'
-```
-
-### CloudWatch logs not appearing
-```bash
-# Verify CloudWatch Observability add-on pod
-kubectl get pods -n amazon-cloudwatch
-
-# Check CloudWatch add-on logs
-kubectl logs -n amazon-cloudwatch -l app=cloudwatch-observability --tail=20
-
-# Verify CloudWatch log groups were created
-aws logs describe-log-groups --log-group-name-prefix "/aws/eks/project-bedrock-cluster"
-```
-
-### Lambda not triggering on S3 upload
-```bash
-# Get bucket name from terraform
-BUCKET_NAME=$(terraform output -raw assets_bucket_name)
-
-# Verify S3 event notification is configured
-aws s3api get-bucket-notification-configuration --bucket $BUCKET_NAME
-
-# Check Lambda permissions
-aws lambda get-policy --function-name bedrock-asset-processor
-
-# Test Lambda manually
-aws lambda invoke --function-name bedrock-asset-processor /tmp/response.json
-cat /tmp/response.json
-```
-
-### Carts ImagePullBackOff - Image not found
-```bash
-# The public.ecr.aws image may not exist with tag 0.6.0
-# Options:
-# 1. Try different version:
-sed -i 's|:0.6.0|:0.5.0|g' k8s/carts/deployment.yaml
-kubectl apply -f k8s/carts/deployment.yaml
-
-# 2. Or disable carts deployment if not critical:
-kubectl delete deployment carts -n retail-app
-
-# 3. Check what tags are available (if accessible):
-aws ecr describe-images --repository-name aws-containers/retail-store-sample-carts \
-  --registry-id public --region us-east-1
-```
+This document covers:
+- Pods not starting / stuck in Pending
+- Pods crashing (CrashLoopBackOff)
+- Database connection errors
+- ALB provisioning issues
+- CloudWatch logs not appearing
+- Lambda not triggering on S3 upload
+- Image pull errors
+- UI 503 errors (S3 assets missing)
+- RabbitMQ pod recovery
+- ALB health check failures
+- Probe configuration verification
 
 ## Useful Commands
 
