@@ -291,7 +291,7 @@ resource "helm_release" "alb_controller" {
     value = aws_iam_role.alb_controller.arn
   }
 
-  # Lightweight resource constraints for Free Tier t3.micro instances
+  # Lightweight resource constraints for Free Tier t3.small instances
   set {
     name  = "resources.requests.cpu"
     value = "100m"
@@ -402,7 +402,7 @@ resource "helm_release" "fluent_bit" {
     value = "false"
   }
 
-  # Minimal resource constraints for Free Tier t3.micro nodes (Kept your perfect limits!)
+  # Minimal resource constraints for Free Tier t3.small nodes (Kept your perfect limits!)
   set {
     name  = "resources.requests.cpu"
     value = "50m"

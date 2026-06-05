@@ -37,7 +37,7 @@ variable "common_tags" {
 variable "aws_eks_node_group_instance_types" {
   description = "EKS Node Group Instance Types"
   type        = list(string)
-  default     = ["t3.micro"] # "t3.micro"
+  default     = ["t3.small"] # "t3.small"
 }
 
 variable "dev_user_arn" {

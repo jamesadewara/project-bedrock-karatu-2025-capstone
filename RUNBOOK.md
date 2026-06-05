@@ -417,7 +417,7 @@ aws logs tail /aws/eks/project-bedrock-cluster/container-logs --follow
 
 This project uses AWS Free Tier resources:
 - **EKS Cluster**: No charge for control plane
-- **EC2 Nodes**: t3.micro/t2.micro (750 hours/month free)
+- **EC2 Nodes**: t3.small (750 hours/month free)
 - **RDS**: 750 hours/month free (MySQL 8.0, PostgreSQL 16.3)
 - **ALB**: Partial free tier (730 hours/month)
 - **S3**: 5GB storage free
