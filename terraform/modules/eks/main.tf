@@ -319,8 +319,8 @@ resource "helm_release" "alb_controller" {
   }
 
   set {
-    name  = "serviceAccount.name"
-    value = "fluent-bit"
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = aws_iam_role.fluent_bit.arn
   }
 
   depends_on = [

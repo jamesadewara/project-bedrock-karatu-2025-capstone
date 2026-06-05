@@ -268,8 +268,7 @@ fi
 
 ```bash
 # View container logs shipped by FluentBit
-aws logs tail /aws/eks/project-bedrock-cluster/containers --follow
-
+aws logs tail /aws/eks/project-bedrock-cluster/containers --region us-east-1 --follow
 # View EKS control plane logs (API, audit, etc.)
 aws logs tail /aws/eks/project-bedrock-cluster/api --follow
 ```
