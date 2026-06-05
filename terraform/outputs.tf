@@ -64,8 +64,8 @@ output "dev_user_secret_access_key" {
 
 output "generated_dev_user_password" {
   description = "Developer Console Password (if set)"
-  value     = aws_iam_user_login_profile.dev_user_profile.password
-  sensitive = true
+  value       = aws_iam_user_login_profile.dev_user_profile.password
+  sensitive   = true
 }
 
 output "acm_certificate_arn" {

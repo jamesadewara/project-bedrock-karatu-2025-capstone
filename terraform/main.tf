@@ -29,20 +29,20 @@ module "vpc" {
 module "eks" {
   source = "./modules/eks"
 
-  cluster_name       = var.cluster_name
-  cluster_version    = var.eks_version
-  vpc_id             = module.vpc.vpc_id
-  private_subnet_ids = module.vpc.private_subnet_ids
-  public_subnet_ids  = module.vpc.public_subnet_ids
-  app_namespace      = var.app_namespace
-  aws_region         = var.region
+  cluster_name            = var.cluster_name
+  cluster_version         = var.eks_version
+  vpc_id                  = module.vpc.vpc_id
+  private_subnet_ids      = module.vpc.private_subnet_ids
+  public_subnet_ids       = module.vpc.public_subnet_ids
+  app_namespace           = var.app_namespace
+  aws_region              = var.region
   eks_public_access_cidrs = var.eks_public_access_cidrs
-  common_tags        = { Project = var.project_tag }
-  dev_user_arn       = aws_iam_user.dev_view.arn
-  db_username        = var.db_username
-  db_password        = random_string.db_password.result
-  db_name_catalog    = var.db_name_catalog
-  db_name_orders     = var.db_name_orders
+  common_tags             = { Project = var.project_tag }
+  dev_user_arn            = aws_iam_user.dev_view.arn
+  db_username             = var.db_username
+  db_password             = random_string.db_password.result
+  db_name_catalog         = var.db_name_catalog
+  db_name_orders          = var.db_name_orders
 }
 
 # RDS MODULE - Managed Data Layer
@@ -246,8 +246,8 @@ resource "kubernetes_service" "catalog_db" {
   }
 
   spec {
-    type           = "ExternalName"
-    external_name  = module.rds.catalog_endpoint
+    type             = "ExternalName"
+    external_name    = module.rds.catalog_endpoint
     session_affinity = "None"
     port {
       port        = 3306
@@ -266,8 +266,8 @@ resource "kubernetes_service" "orders_db" {
   }
 
   spec {
-    type           = "ExternalName"
-    external_name  = module.rds.orders_endpoint
+    type             = "ExternalName"
+    external_name    = module.rds.orders_endpoint
     session_affinity = "None"
     port {
       port        = 5432
@@ -409,7 +409,7 @@ resource "aws_iam_user" "dev_view" {
 resource "aws_iam_user_login_profile" "dev_user_profile" {
   user                    = aws_iam_user.dev_view.name
   password_reset_required = false # Keeps AWS from forcing a change on first login
-  
+
   lifecycle {
     ignore_changes = [
       password_reset_required

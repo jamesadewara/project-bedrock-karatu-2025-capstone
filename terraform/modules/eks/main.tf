@@ -149,9 +149,9 @@ resource "aws_eks_node_group" "main" {
   capacity_type  = "ON_DEMAND"
 
   scaling_config {
-    desired_size = 6  # Bumped from 4 to 6 to let fresh nodes take on the workloads
+    desired_size = 6 # Bumped from 4 to 6 to let fresh nodes take on the workloads
     min_size     = 2
-    max_size     = 8  # Bumped from 5 to 8 to give the scheduler scaling headroom
+    max_size     = 8 # Bumped from 5 to 8 to give the scheduler scaling headroom
   }
 
   update_config {
@@ -175,7 +175,7 @@ resource "null_resource" "enable_prefix_delegation" {
   }
 
   provisioner "local-exec" {
-    command = <<-EOT
+    command     = <<-EOT
       aws eks update-kubeconfig \
         --name ${aws_eks_cluster.main.name} \
         --region ${data.aws_region.current.name} && \
@@ -316,6 +316,11 @@ resource "helm_release" "alb_controller" {
   set {
     name  = "enableLogging"
     value = "true"
+  }
+
+  set {
+    name  = "serviceAccount.name"
+    value = "fluent-bit"
   }
 
   depends_on = [
