@@ -62,7 +62,8 @@ output "dev_user_secret_access_key" {
   sensitive   = true
 }
 
-output "dev_user_console_password" {
+output "generated_dev_user_password" {
   description = "Developer Console Password (if set)"
-  value       = "Use AWS Console password reset or IAM credentials file"
+  value     = aws_iam_user_login_profile.dev_user_profile.password
+  sensitive = true
 }

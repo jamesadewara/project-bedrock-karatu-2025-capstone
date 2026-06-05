@@ -82,6 +82,104 @@ kubectl get ingress retail-app -n retail-app -o jsonpath='{.status.loadBalancer.
 | **RabbitMQ** | Infrastructure | Message broker for async workflows |
 | **Redis** | Infrastructure | In-cluster caching layer |
 
+### Architecture Diagram
+
+```mermaid
+graph TB
+    %% Nodes styling
+    classDef aws fill:#FF9900,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef k8s fill:#326CE5,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef db fill:#3F51B5,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef net fill:#4CAF50,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef serverless fill:#E91E63,stroke:#fff,stroke-width:2px,color:#fff;
+    
+    subgraph AWS_Cloud ["AWS Cloud (us-east-1)"]
+        IGW["Internet Gateway"]:::net
+        ALB["Application Load Balancer (ALB)"]:::net
+        
+        subgraph VPC ["VPC (10.0.0.0/16)"]
+            subgraph AZ_A ["Availability Zone us-east-1a"]
+                PubSub_A["Public Subnet (10.0.1.0/24)"]:::net
+                NatGW_A["NAT Gateway A"]:::net
+                
+                subgraph PrivSub_A ["Private Subnet (10.0.3.0/24)"]
+                    subgraph Node_A ["EKS Node (t3.micro)"]
+                        UI_A["UI Pod"]:::k8s
+                        Catalog_A["Catalog Pod"]:::k8s
+                        Orders_A["Orders Pod"]:::k8s
+                    end
+                end
+            end
+            
+            subgraph AZ_B ["Availability Zone us-east-1b"]
+                PubSub_B["Public Subnet (10.0.2.0/24)"]:::net
+                NatGW_B["NAT Gateway B"]:::net
+                
+                subgraph PrivSub_B ["Private Subnet (10.0.4.0/24)"]
+                    subgraph Node_B ["EKS Node (t3.micro)"]
+                        Carts_B["Carts Pod"]:::k8s
+                        Checkout_B["Checkout Pod"]:::k8s
+                        Assets_B["Assets Pod"]:::k8s
+                        RabbitMQ["RabbitMQ Pod"]:::k8s
+                        Redis["Redis Pod"]:::k8s
+                    end
+                end
+            end
+        end
+        
+        %% Managed Data Layer
+        subgraph Data_Layer ["Managed Data Layer"]
+            RDS_MySQL[("RDS MySQL<br>(Catalog DB)")]:::db
+            RDS_PgSQL[("RDS PostgreSQL<br>(Orders DB)")]:::db
+            DynamoDB[("DynamoDB<br>(Carts Table)")]:::db
+            S3_Assets[("S3 Assets Bucket<br>bedrock-assets-alt-soe-025-3359")]:::db
+        end
+        
+        %% Serverless Integration
+        subgraph Serverless ["Serverless Flow"]
+            Lambda_Proc[["Lambda Processor<br>bedrock-asset-processor"]]:::serverless
+        end
+        
+        %% Monitoring
+        CloudWatch[("CloudWatch Logs")]:::aws
+    end
+
+    %% Ingress & Traffic Routing
+    Client["User / Internet"] --> IGW
+    IGW --> ALB
+    ALB -- "Route Traffic" --> UI_A
+    
+    %% Internal Microservice Communications
+    UI_A --> Catalog_A
+    UI_A --> Orders_A
+    UI_A --> Carts_B
+    UI_A --> Checkout_B
+    UI_A --> Assets_B
+    
+    %% Microservice to Data / Messaging
+    Catalog_A --> RDS_MySQL
+    Orders_A --> RDS_PgSQL
+    Orders_A <--> RabbitMQ
+    Checkout_B <--> RabbitMQ
+    Carts_B -- "IRSA Auth" --> DynamoDB
+    Assets_B -- "Read Assets" --> S3_Assets
+    
+    %% S3 to Lambda Flow
+    Client -- "Upload Images" --> S3_Assets
+    S3_Assets -- "ObjectCreated Event" --> Lambda_Proc
+    Lambda_Proc -- "Log Processing" --> CloudWatch
+    
+    %% EKS Node egress routing
+    NatGW_A --> IGW
+    NatGW_B --> IGW
+    PrivSub_A -.-> NatGW_A
+    PrivSub_B -.-> NatGW_B
+    
+    %% Observability logs flow
+    Node_A -- "FluentBit" --> CloudWatch
+    Node_B -- "FluentBit" --> CloudWatch
+```
+
 ### Data Flow
 
 ```

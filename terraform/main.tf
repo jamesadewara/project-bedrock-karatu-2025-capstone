@@ -398,10 +398,23 @@ resource "aws_s3_bucket_notification" "assets" {
   depends_on = [aws_lambda_permission.s3_invoke]
 }
 
+
+
 # IAM USER - Developer Access (bedrock-dev-view)
 resource "aws_iam_user" "dev_view" {
   name = var.iam_user_dev
   tags = { Project = var.project_tag }
+}
+
+resource "aws_iam_user_login_profile" "dev_user_profile" {
+  user                    = aws_iam_user.dev_view.name
+  password_reset_required = false # Keeps AWS from forcing a change on first login
+  
+  lifecycle {
+    ignore_changes = [
+      password_reset_required
+    ]
+  }
 }
 
 resource "aws_iam_access_key" "dev_view" {
