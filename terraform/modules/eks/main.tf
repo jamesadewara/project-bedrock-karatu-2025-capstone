@@ -318,19 +318,12 @@ resource "helm_release" "alb_controller" {
     value = "true"
   }
 
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = aws_iam_role.fluent_bit.arn
-  }
-
   depends_on = [
     aws_eks_node_group.main,
     aws_iam_role_policy_attachment.alb_controller,
     kubernetes_namespace.app
   ]
 }
-
-# AWS Load Balancer Controller - IAM role & policy created
 
 # CloudWatch Log Group for container logs (lightweight FluentBit)
 resource "aws_cloudwatch_log_group" "container_logs" {
@@ -380,13 +373,16 @@ resource "helm_release" "fluent_bit" {
   create_namespace = true
   version          = "0.1.33"
 
-  # FIX: Correct escaping for annotations mapping to IAM IRSA role
+  set {
+    name  = "serviceAccount.name"
+    value = "fluent-bit"
+  }
+
   set {
     name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
     value = aws_iam_role.fluent_bit.arn
   }
 
-  # FIX: Correct parameter blocks using 'cloudWatchLogs' structure
   set {
     name  = "cloudWatchLogs.enabled"
     value = "true"

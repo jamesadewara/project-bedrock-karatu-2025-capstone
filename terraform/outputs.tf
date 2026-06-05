@@ -83,3 +83,8 @@ output "acm_validation_options" {
     }
   } : {}
 }
+
+output "github_actions_role_arn" {
+  value       = aws_iam_role.github_actions.arn
+  description = "The ARN for the GitHub Actions OIDC role"
+}

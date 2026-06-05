@@ -477,3 +477,39 @@ resource "aws_iam_openid_connect_provider" "github" {
 
   tags = { Project = var.project_tag }
 }
+
+# The IAM Role GitHub Actions will actually assume
+resource "aws_iam_role" "github_actions" {
+  name = "github-actions-terraform-execution"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          # This links the role to the provider you already have
+          Federated = aws_iam_openid_connect_provider.github.arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          }
+          StringLike = {
+            # Restricts access strictly to your capstone repository
+            "token.actions.githubusercontent.com:sub" = "repo:project-bedrock-karatu-2025-capstone/*"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = { Project = var.project_tag }
+}
+
+# Attach Administrator or PowerUser access so Terraform can run plans/applies
+resource "aws_iam_role_policy_attachment" "github_actions_policy" {
+  role       = aws_iam_role.github_actions.name
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
