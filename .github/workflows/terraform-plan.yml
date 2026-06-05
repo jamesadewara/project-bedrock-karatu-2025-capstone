@@ -1,8 +1,3 @@
-# ============================================================
-# GITHUB ACTIONS - Terraform Plan on Pull Request
-# Posts plan output as PR comment for review
-# Uses OIDC for AWS authentication (no hardcoded credentials)
-# ============================================================
 name: Terraform Plan
 
 on:
@@ -14,13 +9,12 @@ on:
 
 permissions:
   id-token: write       # Required for OIDC
-  contents: read          # Required to checkout code
-  pull-requests: write    # Required to post PR comments
+  contents: read        # Required to checkout code
+  pull-requests: write  # Required to post PR comments
 
 env:
   TF_IN_AUTOMATION: true
-  AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
-
+  AWS_REGION: ${{ vars.AWS_REGION }}
 
 jobs:
   terraform-plan:
@@ -39,54 +33,83 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          aws-region: us-east-1
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Terraform-Plan
+          role-duration-seconds: 1800  # 30 min for plan
 
-      # Step 3: Setup Terraform
+      # Step 3: Verify AWS Authentication (debugging)
+      - name: Verify AWS Credentials
+        run: aws sts get-caller-identity
+
+      # Step 4: Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.10.0"
           terraform_wrapper: false
 
-      # Step 4: Terraform Format Check
+      # Step 5: Terraform Format Check
       - name: Terraform Format
         id: fmt
         run: terraform fmt -check -recursive
         continue-on-error: true
 
-      # Step 5: Terraform Init
+      # Step 6: Terraform Init
       - name: Terraform Init
         id: init
         run: terraform init
 
-      # Step 6: Terraform Validate
+      # Step 7: Terraform Validate
       - name: Terraform Validate
         id: validate
         run: terraform validate -no-color
 
-      # Step 7: Terraform Plan
+      # Step 8: Terraform Plan
       - name: Terraform Plan
         id: plan
         run: terraform plan -no-color -input=false -out=tfplan
         continue-on-error: true
 
-      # Step 8: Post Plan to PR Comment
+      # Step 9: Post Plan to PR Comment (FIXED: proper output handling)
       - name: Post Plan to PR
         uses: actions/github-script@v7
         if: github.event_name == 'pull_request'
+        env:
+          PLAN_OUTPUT: ${{ steps.plan.outputs.stdout }}
+          PLAN_STDERR: ${{ steps.plan.outputs.stderr }}
+          FMT_OUTCOME: ${{ steps.fmt.outcome }}
+          INIT_OUTCOME: ${{ steps.init.outcome }}
+          VALIDATE_OUTCOME: ${{ steps.validate.outcome }}
+          PLAN_OUTCOME: ${{ steps.plan.outcome }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const plan = '${{ steps.plan.outputs.stdout }}' || "No plan output";
-            const planErr = '${{ steps.plan.outputs.stderr }}' || "";
+            const plan = process.env.PLAN_OUTPUT || "No plan output";
+            const planErr = process.env.PLAN_STDERR || "";
+            const fmtOutcome = process.env.FMT_OUTCOME;
+            const initOutcome = process.env.INIT_OUTCOME;
+            const validateOutcome = process.env.VALIDATE_OUTCOME;
+            const planOutcome = process.env.PLAN_OUTCOME;
 
-            const output = `## Terraform Plan Results\n\n### Status Summary
-            - **Format Check**: ${{ steps.fmt.outcome }} 🖌️
-            - **Initialization**: ${{ steps.init.outcome }} ⚙️
-            - **Validation**: ${{ steps.validate.outcome }} 🤖
-            - **Plan**: ${{ steps.plan.outcome }} 📖\n\n<details><summary>Show Plan Output</summary>\n\n\`\`\`terraform\n${plan}\n${planErr}\n\`\`\`\n\n</details>\n\n*Triggered by: @${{ github.actor }} | Event: ${{ github.event_name }}*`;
+            const output = `## Terraform Plan Results
+
+            ### Status Summary
+            - **Format Check**: ${fmtOutcome} 🖌️
+            - **Initialization**: ${initOutcome} ⚙️
+            - **Validation**: ${validateOutcome} 🤖
+            - **Plan**: ${planOutcome} 📖
+
+            <details><summary>Show Plan Output</summary>
+
+            \`\`\`terraform
+            ${plan}
+            ${planErr}
+            \`\`\`
+
+            </details>
+
+            *Triggered by: @${{ github.actor }} | Event: ${{ github.event_name }}*`;
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
@@ -95,7 +118,7 @@ jobs:
               body: output
             });
 
-      # Step 9: Fail if plan failed
+      # Step 10: Fail if plan failed
       - name: Check Plan Status
         if: steps.plan.outcome == 'failure'
         run: exit 1

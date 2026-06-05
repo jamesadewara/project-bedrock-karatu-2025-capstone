@@ -84,19 +84,26 @@ Terraform created the database credentials in the retail-app namespace:
 kubectl get secrets -n retail-app
 ```
 
-## Phase 4: Update Carts ServiceAccount with Your AWS Account ID
+## Phase 4: Kubernetes Resources (Now Managed by Terraform)
 
-The carts ServiceAccount uses IRSA (IAM Roles for Service Accounts) to access DynamoDB.
+The following Kubernetes resources are now created automatically by Terraform:
+
+- **ServiceAccount**: `carts` (with IRSA annotation for DynamoDB access)
+- **Secrets**: `catalog-db-credentials`, `orders-db-credentials`, `rabbitmq-credentials`
+- **ExternalName Services**: `catalog-db`, `orders-db` (pointing to RDS endpoints)
+
+**No manual updates needed!** Terraform dynamically:
+1. Generates IRSA annotations using the actual account ID
+2. Creates RabbitMQ credentials (random 32-char password)
+3. Maps RDS endpoints without hardcoding
+
+Verify all resources are created:
 
 ```bash
-# Ensure you're in the project root directory
-cd $(git rev-parse --show-toplevel) 2>/dev/null || cd ..
-
-# Get your AWS Account ID
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-
-# Update the carts service account manifest with your Account ID
-sed -i "s|arn:aws:iam::.*:role/bedrock-carts-dynamodb-role|arn:aws:iam::${ACCOUNT_ID}:role/bedrock-carts-dynamodb-role|g" k8s/carts/serviceaccount.yaml
+kubectl get sa -n retail-app carts
+kubectl get secret -n retail-app catalog-db-credentials orders-db-credentials rabbitmq-credentials
+kubectl get svc -n retail-app catalog-db orders-db
+```
 
 # Verify the replacement
 grep "role-arn" k8s/carts/serviceaccount.yaml
@@ -123,7 +130,7 @@ echo "✓ Application resources deployed"
 kubectl get pods -n retail-app -o wide
 kubectl get svc -n retail-app
 kubectl get ingress -n retail-app
-
+watch kubectl get pods -n retail-app
 # NOTE: kubectl wait may hang indefinitely if deployments don't reach ready state
 # This can happen if:
 #   - Nodes don't have capacity (pending pods)
@@ -428,4 +435,40 @@ This project uses AWS Free Tier resources:
 
 ---
 
-**Last Updated:** June 4, 2026
+## Code Quality & Security Review (June 5, 2026)
+
+A comprehensive code review has been completed. See [CODE_REVIEW.md](CODE_REVIEW.md) for full details.
+
+### Critical Issues Fixed
+1. ✅ **Secrets Manager Recovery Window** (0 → 7 days) - Prevents accidental permanent data loss
+2. ✅ **EKS Public Access CIDR** (0.0.0.0/0 → configurable) - Restricts API endpoint access
+3. ✅ **Missing Module Output** - Added kubernetes_namespace export for dependency resolution
+4. ✅ **Hardcoded Region** (us-east-1 → variable) - Makes code portable across regions
+
+### High-Severity Fixes
+1. ✅ **AWS Account ID Hardcoding** - Now dynamic via Terraform
+2. ✅ **RabbitMQ Default Credentials** - Now generated secure random password
+3. ✅ **RDS Endpoints Hardcoding** - Now dynamic via Terraform
+4. ✅ **Missing TLS Configuration** - Added HTTPS/TLS instructions for Ingress
+5. ✅ **GitHub Actions Syntax Error** - Fixed `{{ vars }}` → `${{ vars }}`
+
+### Recommended Production Changes
+Before deploying to production, update `terraform.tfvars`:
+
+```hcl
+# Restrict EKS API to your IP for security
+eks_public_access_cidrs = ["YOUR_IP/32"]
+
+# Extend retention for compliance
+db_recovery_window_in_days = 30  # 7 is minimum
+
+# In modules/rds/main.tf, update:
+# backup_retention_period = 7  # Currently 1 day
+# skip_final_snapshot = false  # Currently true
+```
+
+**See [CODE_REVIEW.md](CODE_REVIEW.md) for complete recommendations.**
+
+---
+
+**Last Updated:** June 5, 2026

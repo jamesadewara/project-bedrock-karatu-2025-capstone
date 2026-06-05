@@ -20,7 +20,7 @@ spec:
       serviceAccountName: default
       containers:
       - name: ui
-        image: public.ecr.aws/aws-containers/retail-store-sample-ui:0.6.0
+        image: public.ecr.aws/aws-containers/retail-store-sample-ui:1.1.0
         imagePullPolicy: IfNotPresent
         ports:
         - name: http

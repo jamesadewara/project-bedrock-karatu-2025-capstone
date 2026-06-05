@@ -28,6 +28,17 @@ variable "app_namespace" {
   type        = string
 }
 
+variable "aws_region" {
+  description = "AWS Region"
+  type        = string
+}
+
+variable "eks_public_access_cidrs" {
+  description = "EKS API endpoint public access CIDR blocks (for security: restrict to your IP)"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
 variable "common_tags" {
   description = "Common tags"
   type        = map(string)

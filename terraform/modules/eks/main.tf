@@ -107,7 +107,7 @@ resource "aws_eks_cluster" "main" {
     subnet_ids              = var.private_subnet_ids
     endpoint_private_access = true
     endpoint_public_access  = true
-    public_access_cidrs     = ["0.0.0.0/0"]
+    public_access_cidrs     = var.eks_public_access_cidrs
     security_group_ids      = [aws_security_group.nodes.id]
   }
 
@@ -267,7 +267,7 @@ resource "helm_release" "alb_controller" {
 
   set {
     name  = "region"
-    value = "us-east-1"
+    value = var.aws_region
   }
 
   set {

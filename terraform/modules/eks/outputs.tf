@@ -29,3 +29,8 @@ output "alb_controller_role_arn" {
 output "cluster_security_group_id" {
   value = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
 }
+
+output "kubernetes_namespace" {
+  description = "Kubernetes application namespace"
+  value       = kubernetes_namespace.app.metadata[0].name
+}

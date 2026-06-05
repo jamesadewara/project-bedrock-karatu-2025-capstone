@@ -35,6 +35,8 @@ module "eks" {
   private_subnet_ids = module.vpc.private_subnet_ids
   public_subnet_ids  = module.vpc.public_subnet_ids
   app_namespace      = var.app_namespace
+  aws_region         = var.region
+  eks_public_access_cidrs = var.eks_public_access_cidrs
   common_tags        = { Project = var.project_tag }
   dev_user_arn       = aws_iam_user.dev_view.arn
   db_username        = var.db_username
@@ -123,11 +125,24 @@ resource "aws_iam_role_policy" "carts_dynamodb" {
   })
 }
 
+# Kubernetes ServiceAccount for Carts with IRSA annotation
+resource "kubernetes_service_account" "carts" {
+  metadata {
+    name      = "carts"
+    namespace = var.app_namespace
+    annotations = {
+      "eks.amazonaws.com/role-arn" = aws_iam_role.carts_dynamodb.arn
+    }
+  }
+
+  depends_on = [module.eks.kubernetes_namespace]
+}
+
 # SECRETS MANAGER - Database Credentials
 resource "aws_secretsmanager_secret" "catalog_db" {
   name                    = "bedrock/catalog-db-credentials"
   description             = "Catalog RDS credentials"
-  recovery_window_in_days = 0 # normally 7 days is ideal
+  recovery_window_in_days = var.aws_secretsmanager_secret_db_recovery_window_in_days
   tags                    = { Project = var.project_tag }
 }
 
@@ -146,7 +161,7 @@ resource "aws_secretsmanager_secret_version" "catalog_db" {
 resource "aws_secretsmanager_secret" "orders_db" {
   name                    = "bedrock/orders-db-credentials"
   description             = "Orders RDS credentials"
-  recovery_window_in_days = 0 # normally 7 days is ideal
+  recovery_window_in_days = var.aws_secretsmanager_secret_db_recovery_window_in_days
   tags                    = { Project = var.project_tag }
 }
 
@@ -181,6 +196,29 @@ resource "kubernetes_secret" "catalog_db" {
   depends_on = [module.rds, module.eks.kubernetes_namespace]
 }
 
+# Kubernetes Secret - RabbitMQ Credentials
+resource "kubernetes_secret" "rabbitmq" {
+  metadata {
+    name      = "rabbitmq-credentials"
+    namespace = var.app_namespace
+  }
+
+  data = {
+    username = "bedrock-mq"
+    password = random_string.mq_password.result
+  }
+
+  type = "Opaque"
+
+  depends_on = [module.eks.kubernetes_namespace]
+}
+
+# Random password for RabbitMQ (separate from DB password)
+resource "random_string" "mq_password" {
+  length  = 32
+  special = true
+}
+
 resource "kubernetes_secret" "orders_db" {
   metadata {
     name      = "orders-db-credentials"
@@ -200,6 +238,47 @@ resource "kubernetes_secret" "orders_db" {
   depends_on = [module.rds, module.eks.kubernetes_namespace]
 }
 
+# Kubernetes ExternalName Services for RDS Databases
+resource "kubernetes_service" "catalog_db" {
+  metadata {
+    name      = "catalog-db"
+    namespace = var.app_namespace
+  }
+
+  spec {
+    type           = "ExternalName"
+    external_name  = module.rds.catalog_endpoint
+    session_affinity = "None"
+    port {
+      port        = 3306
+      target_port = 3306
+      protocol    = "TCP"
+    }
+  }
+
+  depends_on = [module.rds, module.eks.kubernetes_namespace]
+}
+
+resource "kubernetes_service" "orders_db" {
+  metadata {
+    name      = "orders-db"
+    namespace = var.app_namespace
+  }
+
+  spec {
+    type           = "ExternalName"
+    external_name  = module.rds.orders_endpoint
+    session_affinity = "None"
+    port {
+      port        = 5432
+      target_port = 5432
+      protocol    = "TCP"
+    }
+  }
+
+  depends_on = [module.rds, module.eks.kubernetes_namespace]
+}
+
 # S3 BUCKET - Assets
 resource "aws_s3_bucket" "assets" {
   bucket = var.s3_bucket_name
@@ -209,7 +288,7 @@ resource "aws_s3_bucket" "assets" {
 resource "aws_s3_bucket_versioning" "assets" {
   bucket = aws_s3_bucket.assets.id
   versioning_configuration {
-    status = "Disabled"
+    status = "Enabled"
   }
 }
 
