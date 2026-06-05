@@ -106,3 +106,9 @@ variable "aws_secretsmanager_secret_db_recovery_window_in_days" {
   type        = number
   default     = 0 # normally 7 days is ideal --- set to 0 for immediate deletion during development
 }
+
+variable "domain_name" {
+  description = "The custom domain name to request an ACM certificate for (e.g. example.com). Leave empty to skip ACM."
+  type        = string
+  default     = "spatialdesign3d.site"
+}

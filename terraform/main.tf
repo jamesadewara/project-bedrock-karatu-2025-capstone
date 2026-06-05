@@ -451,3 +451,20 @@ resource "aws_cloudwatch_log_group" "lambda" {
     prevent_destroy = false
   }
 }
+
+resource "aws_acm_certificate" "cert" {
+  count             = var.domain_name != "" ? 1 : 0
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+
+  subject_alternative_names = [
+    "www.${var.domain_name}",
+    "*.${var.domain_name}"
+  ]
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = { Project = var.project_tag }
+}

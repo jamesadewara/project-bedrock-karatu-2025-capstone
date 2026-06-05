@@ -67,3 +67,19 @@ output "generated_dev_user_password" {
   value     = aws_iam_user_login_profile.dev_user_profile.password
   sensitive = true
 }
+
+output "acm_certificate_arn" {
+  description = "The ARN of the ACM certificate if domain_name is provided"
+  value       = length(aws_acm_certificate.cert) > 0 ? aws_acm_certificate.cert[0].arn : null
+}
+
+output "acm_validation_options" {
+  description = "DNS CNAME validation records to add in Namecheap"
+  value = length(aws_acm_certificate.cert) > 0 ? {
+    for dvo in aws_acm_certificate.cert[0].domain_validation_options : dvo.domain_name => {
+      host   = dvo.resource_record_name
+      target = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+}
