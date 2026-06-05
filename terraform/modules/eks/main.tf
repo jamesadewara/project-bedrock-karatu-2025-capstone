@@ -75,17 +75,6 @@ resource "aws_security_group" "nodes" {
   })
 }
 
-# Allow node-to-node communication (all protocols)
-resource "aws_security_group_rule" "nodes_self_ingress" {
-  type              = "ingress"
-  from_port         = 0
-  to_port           = 65535
-  protocol          = "-1"
-  self              = true
-  security_group_id = aws_security_group.nodes.id
-  description       = "Allow all internal node-to-node communication"
-}
-
 # Allow control plane to communicate with kubelet (port 10250)
 resource "aws_security_group_rule" "control_plane_to_nodes_kubelet" {
   type              = "ingress"
