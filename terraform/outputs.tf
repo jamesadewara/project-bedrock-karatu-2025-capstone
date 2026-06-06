@@ -88,3 +88,12 @@ output "github_actions_role_arn" {
   value       = aws_iam_role.github_actions.arn
   description = "The ARN for the GitHub Actions OIDC role"
 }
+
+# The DNS hostname of the ALB created by the Kubernetes Ingress.
+# Point your Namecheap CNAME record at this value for:
+#   - @ (root domain)  → ALIAS / CNAME to this
+#   - www              → CNAME to this
+output "alb_hostname" {
+  description = "ALB DNS hostname — use as CNAME target in Namecheap for both root and www"
+  value       = var.domain_name != "" ? try(kubernetes_ingress_v1.retail_app[0].status[0].load_balancer[0].ingress[0].hostname, "ALB not yet provisioned — run terraform apply first") : "No domain configured"
+}

@@ -469,6 +469,99 @@ resource "aws_acm_certificate" "cert" {
   tags = { Project = var.project_tag }
 }
 
+# -----------------------------------------------------------------------
+# KUBERNETES INGRESS - HTTPS with ACM Certificate (Terraform-managed)
+# This resource is 100% dynamic: the ACM ARN is referenced directly from
+# the aws_acm_certificate resource above — no hardcoded strings anywhere.
+# Recreated automatically on every `terraform apply`.
+# -----------------------------------------------------------------------
+resource "kubernetes_ingress_v1" "retail_app" {
+  count = var.domain_name != "" ? 1 : 0
+
+  metadata {
+    name      = "retail-app"
+    namespace = var.app_namespace
+
+    annotations = {
+      # Use the AWS Load Balancer Controller
+      "kubernetes.io/ingress.class" = "alb"
+
+      # Internet-facing ALB (public endpoint)
+      "alb.ingress.kubernetes.io/scheme" = "internet-facing"
+
+      # Route traffic directly to pod IPs (required for EKS)
+      "alb.ingress.kubernetes.io/target-type" = "ip"
+
+      # Open both HTTP (80) and HTTPS (443) listeners on the ALB
+      "alb.ingress.kubernetes.io/listen-ports" = jsonencode([
+        { HTTP = 80 },
+        { HTTPS = 443 }
+      ])
+
+      # Automatically redirect all HTTP traffic to HTTPS
+      "alb.ingress.kubernetes.io/ssl-redirect" = "443"
+
+      # *** THE KEY DYNAMIC LINK ***
+      # Directly references the ACM certificate created above — fully automated,
+      # zero copy-paste. When the cert is replaced, this updates on next apply.
+      "alb.ingress.kubernetes.io/certificate-arn" = aws_acm_certificate.cert[0].arn
+
+      # Health check settings
+      "alb.ingress.kubernetes.io/healthcheck-path"     = "/actuator/health"
+      "alb.ingress.kubernetes.io/healthcheck-protocol" = "HTTP"
+      "alb.ingress.kubernetes.io/success-codes"        = "200"
+
+      # Use the public subnets for the ALB
+      "alb.ingress.kubernetes.io/subnets" = join(",", module.vpc.public_subnet_ids)
+    }
+  }
+
+  spec {
+    # Rule for root domain (e.g. spatialdesign3d.site)
+    rule {
+      host = var.domain_name
+      http {
+        path {
+          path      = "/"
+          path_type = "Prefix"
+          backend {
+            service {
+              name = "ui"
+              port { number = 80 }
+            }
+          }
+        }
+      }
+    }
+
+    # Rule for www subdomain (e.g. www.spatialdesign3d.site)
+    rule {
+      host = "www.${var.domain_name}"
+      http {
+        path {
+          path      = "/"
+          path_type = "Prefix"
+          backend {
+            service {
+              name = "ui"
+              port { number = 80 }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [
+    module.eks,
+    aws_acm_certificate.cert
+  ]
+
+  timeouts {
+    create = "10m"
+  }
+}
+
 # GitHub Actions OIDC Provider
 # defined as a data instead of resoruce so terraform does not show an output error when it already exists
 data "aws_iam_openid_connect_provider" "github" {

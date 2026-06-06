@@ -49,7 +49,7 @@ variable "project_tag" {
 variable "eks_version" {
   description = "EKS Kubernetes Version"
   type        = string
-  default     = "1.32"
+  default     = "1.34"
 }
 
 variable "eks_public_access_cidrs" {
