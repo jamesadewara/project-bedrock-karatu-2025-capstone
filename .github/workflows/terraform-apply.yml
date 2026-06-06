@@ -88,8 +88,13 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
-      # Step 7: Terraform Apply 
-      - name: Terraform Apply
+      # Step 7: Terraform Apply - Phase 1 (Cluster)
+      # Create the cluster first so that the K8s/Helm providers can connect to it
+      - name: Terraform Apply - Phase 1 (Cluster)
+        run: terraform apply -target=module.eks.aws_eks_cluster.main -target=module.eks.aws_eks_node_group.main -auto-approve -input=false
+
+      # Step 8: Terraform Apply - Phase 2 (Everything Else)
+      - name: Terraform Apply - Phase 2 (All)
         id: apply
         run: terraform apply -auto-approve -input=false
 

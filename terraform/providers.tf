@@ -1,23 +1,25 @@
-data "aws_eks_cluster" "this" {
-  name = var.cluster_name
-}
-
-data "aws_eks_cluster_auth" "this" {
-  name = var.cluster_name
-}
-
 # Kubernetes Provider for EKS
 provider "kubernetes" {
-  host                   = try(data.aws_eks_cluster.this.endpoint, "")
-  cluster_ca_certificate = try(base64decode(data.aws_eks_cluster.this.certificate_authority[0].data), "")
-  token                  = try(data.aws_eks_cluster_auth.this.token, "")
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority)
+
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name, "--region", var.region]
+  }
 }
 
 # Helm Provider for EKS Add-ons
 provider "helm" {
   kubernetes {
-    host                   = try(data.aws_eks_cluster.this.endpoint, "")
-    cluster_ca_certificate = try(base64decode(data.aws_eks_cluster.this.certificate_authority[0].data), "")
-    token                  = try(data.aws_eks_cluster_auth.this.token, "")
+    host                   = module.eks.cluster_endpoint
+    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority)
+
+    exec {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "aws"
+      args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name, "--region", var.region]
+    }
   }
 }
