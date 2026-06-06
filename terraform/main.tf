@@ -43,6 +43,7 @@ module "eks" {
   db_password             = random_string.db_password.result
   db_name_catalog         = var.db_name_catalog
   db_name_orders          = var.db_name_orders
+  github_actions_role_arn = aws_iam_role.github_actions.arn
 }
 
 # RDS MODULE - Managed Data Layer

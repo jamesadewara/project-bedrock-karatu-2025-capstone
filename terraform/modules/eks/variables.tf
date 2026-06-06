@@ -68,8 +68,6 @@ variable "db_password" {
   sensitive   = true
 }
 
-
-
 variable "db_name_catalog" {
   description = "Catalog database name"
   type        = string
@@ -77,5 +75,10 @@ variable "db_name_catalog" {
 
 variable "db_name_orders" {
   description = "Orders database name"
+  type        = string
+}
+
+variable "github_actions_role_arn" {
+  description = "IAM ARN of the GitHub Actions role to map in aws-auth"
   type        = string
 }

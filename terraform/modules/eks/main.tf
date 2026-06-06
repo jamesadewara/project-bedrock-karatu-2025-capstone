@@ -111,6 +111,11 @@ resource "aws_eks_cluster" "main" {
     security_group_ids      = [aws_security_group.nodes.id]
   }
 
+  access_config {
+    authentication_mode                         = "API_AND_CONFIG_MAP"
+    bootstrap_cluster_creator_admin_permissions = true
+  }
+
   enabled_cluster_log_types = [
     "api",
     "audit",
@@ -494,6 +499,18 @@ resource "kubernetes_config_map_v1_data" "aws_auth" {
   }
 
   data = {
+    mapRoles = yamlencode([
+      {
+        rolearn  = aws_iam_role.node_group.arn
+        username = "system:node:{{EC2PrivateDNSName}}"
+        groups   = ["system:bootstrappers", "system:nodes"]
+      },
+      {
+        rolearn  = var.github_actions_role_arn
+        username = "github-actions"
+        groups   = ["system:masters"]
+      }
+    ])
     mapUsers = yamlencode([{
       userarn  = var.dev_user_arn
       username = "bedrock-dev-view"
