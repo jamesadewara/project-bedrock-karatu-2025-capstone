@@ -8,6 +8,11 @@
 
 ## Phase 1: Infrastructure Provisioning (Terraform)
 
+> **💡 NOTE: Fully Automated via CI/CD**
+> You do not need to run these commands manually! Simply commit and push your code to GitHub. The GitHub Actions pipeline (`terraform-apply.yml`) will run security scans and automatically provision all of this infrastructure. 
+> 
+> The manual steps below are provided for reference or local development only.
+
 ```bash
 cd terraform
 # Step 1a: Download AWS Load Balancer Controller IAM Policy
@@ -178,7 +183,7 @@ Step 1: Verifying Prerequisites
 ✅ Download tool available: wget
 ✅ kubectl installed
 ✅ AWS Account ID: 123456789012
-✅ S3 bucket accessible: s3://bedrock-assets-alt-soe-025-3359/
+✅ S3 bucket accessible: s3://YOUR-DYNAMIC-BUCKET-NAME/
 
 Step 2: Setting Up Local Assets Directory
 ✅ Created assets directory: /home/WORKSPACE/project-bedrock-karatu-2025-capstone/assets-images
@@ -204,7 +209,7 @@ Step 7: Restarting Deployments
 
 Summary:
   📁 Local images:     /home/WORKSPACE/.../assets-images (47 files)
-  ☁️  S3 bucket:        s3://bedrock-assets-alt-soe-025-3359/ (47 files)
+  ☁️  S3 bucket:        s3://YOUR-DYNAMIC-BUCKET-NAME/ (47 files)
   🎯 Deployments:      Restarted (ui, assets, rabbitmq)
 ```
 
@@ -318,7 +323,7 @@ The bedrock-dev-view user is mapped to the Kubernetes "view" ClusterRole:
 # kubectl get pods -n retail-app
 
 # Test: bedrock-dev-view can WRITE to S3 (should succeed)
-# aws s3 cp file.txt s3://bedrock-assets-alt-soe-025-3359/
+# aws s3 cp file.txt s3://YOUR-DYNAMIC-BUCKET-NAME/
 
 # Test: bedrock-dev-view CANNOT delete pods (should fail with RBAC error)
 # kubectl delete pod <pod-name> -n retail-app
@@ -381,58 +386,6 @@ This document covers:
 - RabbitMQ pod recovery
 - ALB health check failures
 - Probe configuration verification
-
-## Useful Commands
-
-```bash
-# Get all resources in retail-app namespace
-kubectl get all -n retail-app
-
-# Stream logs from all pods
-kubectl logs -n retail-app --all-containers=true -f
-
-# Get detailed pod information
-kubectl get pods -n retail-app -o wide -w # check in real time
-
-# Check cluster events
-kubectl get events --all-namespaces --sort-by='.lastTimestamp'
-
-# Test service connectivity
-kubectl exec -it <pod> -n retail-app -- curl http://catalog.retail-app.svc.cluster.local/health
-
-# Monitor CloudWatch logs in real-time
-aws logs tail /aws/eks/project-bedrock-cluster/container-logs --follow
-```
-
----
-
-## Free Tier Considerations
-
-This project uses AWS Free Tier resources:
-- **EKS Cluster**: No charge for control plane
-- **EC2 Nodes**: t3.small (750 hours/month free)
-- **RDS**: 750 hours/month free (MySQL 8.0, PostgreSQL 16.3)
-- **ALB**: Partial free tier (730 hours/month)
-- **S3**: 5GB storage free
-- **Lambda**: 1 million requests/month free
-- **CloudWatch Logs**: 5GB ingestion free
-
-⚠️ **Scaling caveat**: The Free Tier account may have limits preventing scaling beyond 6-8 small instances. If you need more capacity, upgrade to a paid account or request a limit increase from AWS Support.
-
-A comprehensive code review has been completed. See [CODE_REVIEW.md](CODE_REVIEW.md) for full details.
-
-### Critical Issues Fixed
-1. ✅ **Secrets Manager Recovery Window** (0 → 7 days) - Prevents accidental permanent data loss
-2. ✅ **EKS Public Access CIDR** (0.0.0.0/0 → configurable) - Restricts API endpoint access
-3. ✅ **Missing Module Output** - Added kubernetes_namespace export for dependency resolution
-4. ✅ **Hardcoded Region** (us-east-1 → variable) - Makes code portable across regions
-
-### High-Severity Fixes
-1. ✅ **AWS Account ID Hardcoding** - Now dynamic via Terraform
-2. ✅ **RabbitMQ Default Credentials** - Now generated secure random password
-3. ✅ **RDS Endpoints Hardcoding** - Now dynamic via Terraform
-4. ✅ **Missing TLS Configuration** - Added HTTPS/TLS instructions for Ingress
-5. ✅ **GitHub Actions Syntax Error** - Fixed `{{ vars }}` → `${{ vars }}`
 
 ### Recommended Production Changes
 Before deploying to production, update `terraform.tfvars`:

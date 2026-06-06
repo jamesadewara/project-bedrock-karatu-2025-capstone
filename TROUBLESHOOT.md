@@ -113,7 +113,7 @@ aws ecr describe-images --repository-name aws-containers/retail-store-sample-car
 
 ## UI returning 503 Service Temporarily Unavailable (S3 Assets Missing)
 
-**Root Cause:** The S3 bucket `bedrock-assets-alt-soe-025-3359` is empty. The assets service has no product images to serve, causing the UI to return 503 errors to clients.
+**Root Cause:** The S3 bucket used for assets is empty. The assets service has no product images to serve, causing the UI to return 503 errors to clients.
 
 **Symptoms:**
 - ALB responds with 503 to all requests
@@ -145,8 +145,9 @@ kubectl logs -n retail-app -l app=ui --tail=50
 # Check readiness probe status
 kubectl describe pod -n retail-app -l app=ui | grep -A 20 "Readiness probe"
 
-# If bucket still empty, check with:
-aws s3 ls s3://bedrock-assets-alt-soe-025-3359/ --recursive --summarize
+# If bucket still empty, check with (run this inside the terraform/ directory):
+BUCKET_NAME=$(terraform output -raw assets_bucket_name)
+aws s3 ls s3://${BUCKET_NAME}/ --recursive --summarize
 
 # If sync permissions denied, ensure AWS credentials have s3:* permissions:
 aws iam get-user-policy --user-name $(aws sts get-caller-identity --query 'Arn' --output text | cut -d'/' -f6) \
@@ -165,8 +166,9 @@ aws iam get-user-policy --user-name $(aws sts get-caller-identity --query 'Arn' 
 **Quick Fix:**
 
 ```bash
-# 1. Check if assets sync completed (see section above)
-aws s3 ls s3://bedrock-assets-alt-soe-025-3359/ --recursive | wc -l
+# 1. Check if assets sync completed (run this inside the terraform/ directory)
+BUCKET_NAME=$(terraform output -raw assets_bucket_name)
+aws s3 ls s3://${BUCKET_NAME}/ --recursive | wc -l
 
 # 2. Delete and restart RabbitMQ pod
 kubectl delete pod -n retail-app -l app=rabbitmq
