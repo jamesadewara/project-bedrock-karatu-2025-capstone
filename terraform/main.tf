@@ -470,12 +470,9 @@ resource "aws_acm_certificate" "cert" {
 }
 
 # GitHub Actions OIDC Provider
-resource "aws_iam_openid_connect_provider" "github" {
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1", "1c58a3a8518e8759bf075b76b750d4f2df264fcd"]
-
-  tags = { Project = var.project_tag }
+# defined as a data instead of resoruce so terraform does not show an output error when it already exists
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
 }
 
 # The IAM Role GitHub Actions will actually assume
@@ -489,7 +486,7 @@ resource "aws_iam_role" "github_actions" {
         Effect = "Allow"
         Principal = {
           # This links the role to the provider you already have
-          Federated = aws_iam_openid_connect_provider.github.arn
+          Federated = data.aws_iam_openid_connect_provider.github.arn
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
