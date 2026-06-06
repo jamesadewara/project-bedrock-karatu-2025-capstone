@@ -29,9 +29,15 @@ spec:
           containerPort: 15672
         env:
         - name: RABBITMQ_DEFAULT_USER
-          value: guest
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-credentials
+              key: username
         - name: RABBITMQ_DEFAULT_PASS
-          value: guest
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-credentials
+              key: password
         resources:
           requests:
             memory: "256Mi"
@@ -45,13 +51,17 @@ spec:
             - rabbitmq-diagnostics
             - -q
             - ping
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         readinessProbe:
           exec:
             command:
             - rabbitmq-diagnostics
             - -q
             - ping
-          initialDelaySeconds: 5
+          initialDelaySeconds: 15
           periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3

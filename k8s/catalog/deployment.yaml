@@ -20,7 +20,7 @@ spec:
       serviceAccountName: default
       containers:
       - name: catalog
-        image: public.ecr.aws/aws-containers/retail-store-sample-catalog:0.6.0
+        image: public.ecr.aws/aws-containers/retail-store-sample-catalog:1.6.1
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
@@ -48,6 +48,8 @@ spec:
             secretKeyRef:
               name: catalog-db-credentials
               key: dbname
+        - name: DB_MIGRATION_DISABLE
+          value: "false"
         resources:
           requests:
             memory: "128Mi"
@@ -59,11 +61,13 @@ spec:
           httpGet:
             path: /health
             port: 8080
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 10
+          failureThreshold: 5
         readinessProbe:
           httpGet:
             path: /health
             port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 5
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          failureThreshold: 3

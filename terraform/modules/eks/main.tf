@@ -75,17 +75,6 @@ resource "aws_security_group" "nodes" {
   })
 }
 
-# Allow node-to-node communication (all protocols)
-resource "aws_security_group_rule" "nodes_self_ingress" {
-  type              = "ingress"
-  from_port         = 0
-  to_port           = 65535
-  protocol          = "-1"
-  self              = true
-  security_group_id = aws_security_group.nodes.id
-  description       = "Allow all internal node-to-node communication"
-}
-
 # Allow control plane to communicate with kubelet (port 10250)
 resource "aws_security_group_rule" "control_plane_to_nodes_kubelet" {
   type              = "ingress"
@@ -118,9 +107,15 @@ resource "aws_eks_cluster" "main" {
     subnet_ids              = var.private_subnet_ids
     endpoint_private_access = true
     endpoint_public_access  = true
-    public_access_cidrs     = ["0.0.0.0/0"]
+    public_access_cidrs     = var.eks_public_access_cidrs
     security_group_ids      = [aws_security_group.nodes.id]
   }
+
+  # COMMENT THIS OUT FOR NOW TO AVOID THE AWS CONFLICT
+  # access_config {
+  #   authentication_mode                         = "API_AND_CONFIG_MAP"
+  #   bootstrap_cluster_creator_admin_permissions = true
+  # }
 
   enabled_cluster_log_types = [
     "api",
@@ -160,9 +155,9 @@ resource "aws_eks_node_group" "main" {
   capacity_type  = "ON_DEMAND"
 
   scaling_config {
-    desired_size = 4  # Bumped from 2 to 4 to give the Retail App enough total aggregate RAM
+    desired_size = 6 # Bumped from 4 to 6 to let fresh nodes take on the workloads
     min_size     = 2
-    max_size     = 5 # Fixed to prevent accidental scaling costs
+    max_size     = 8 # Bumped from 5 to 8 to give the scheduler scaling headroom
   }
 
   update_config {
@@ -186,7 +181,7 @@ resource "null_resource" "enable_prefix_delegation" {
   }
 
   provisioner "local-exec" {
-    command = <<-EOT
+    command     = <<-EOT
       aws eks update-kubeconfig \
         --name ${aws_eks_cluster.main.name} \
         --region ${data.aws_region.current.name} && \
@@ -219,6 +214,48 @@ resource "null_resource" "enable_prefix_delegation" {
     aws_iam_role_policy_attachment.node_cni
   ]
 }
+
+# ---------------------------------------------------------------------------
+# API READINESS GATE
+# AWS marks a node group as ACTIVE before the Kubernetes API server is
+# actually reachable. This null_resource actively polls until kubectl can
+# connect, preventing race conditions in all downstream K8s resources.
+# ---------------------------------------------------------------------------
+resource "null_resource" "api_ready" {
+  triggers = {
+    cluster_id = aws_eks_cluster.main.id
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      echo "[api_ready] Updating kubeconfig..."
+      aws eks update-kubeconfig \
+        --name ${aws_eks_cluster.main.name} \
+        --region ${data.aws_region.current.name}
+
+      echo "[api_ready] Waiting for EKS API server to accept connections..."
+      MAX=30
+      COUNT=0
+      until kubectl get nodes --request-timeout=5s > /dev/null 2>&1; do
+        COUNT=$((COUNT + 1))
+        if [ $COUNT -ge $MAX ]; then
+          echo "[api_ready] ERROR: EKS API not reachable after $((MAX * 10))s. Aborting."
+          exit 1
+        fi
+        echo "[api_ready] Attempt $COUNT/$MAX — API not yet ready, retrying in 10s..."
+        sleep 10
+      done
+      echo "[api_ready] EKS API is ready after $((COUNT * 10))s."
+    EOT
+  }
+
+  depends_on = [
+    aws_eks_node_group.main,
+    null_resource.enable_prefix_delegation
+  ]
+}
+
 
 # AWS Load Balancer Controller IAM Role (IRSA)
 resource "aws_iam_role" "alb_controller" {
@@ -278,7 +315,7 @@ resource "helm_release" "alb_controller" {
 
   set {
     name  = "region"
-    value = "us-east-1"
+    value = var.aws_region
   }
 
   set {
@@ -302,7 +339,7 @@ resource "helm_release" "alb_controller" {
     value = aws_iam_role.alb_controller.arn
   }
 
-  # Lightweight resource constraints for Free Tier t3.micro instances
+  # Lightweight resource constraints for Free Tier t3.small instances
   set {
     name  = "resources.requests.cpu"
     value = "100m"
@@ -330,13 +367,11 @@ resource "helm_release" "alb_controller" {
   }
 
   depends_on = [
-    aws_eks_node_group.main,
+    null_resource.api_ready, # Wait for K8s API to be reachable
     aws_iam_role_policy_attachment.alb_controller,
     kubernetes_namespace.app
   ]
 }
-
-# AWS Load Balancer Controller - IAM role & policy created
 
 # CloudWatch Log Group for container logs (lightweight FluentBit)
 resource "aws_cloudwatch_log_group" "container_logs" {
@@ -386,13 +421,16 @@ resource "helm_release" "fluent_bit" {
   create_namespace = true
   version          = "0.1.33"
 
-  # FIX: Correct escaping for annotations mapping to IAM IRSA role
+  set {
+    name  = "serviceAccount.name"
+    value = "fluent-bit"
+  }
+
   set {
     name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
     value = aws_iam_role.fluent_bit.arn
   }
 
-  # FIX: Correct parameter blocks using 'cloudWatchLogs' structure
   set {
     name  = "cloudWatchLogs.enabled"
     value = "true"
@@ -413,7 +451,7 @@ resource "helm_release" "fluent_bit" {
     value = "false"
   }
 
-  # Minimal resource constraints for Free Tier t3.micro nodes (Kept your perfect limits!)
+  # Minimal resource constraints for Free Tier t3.small nodes (Kept your perfect limits!)
   set {
     name  = "resources.requests.cpu"
     value = "50m"
@@ -435,7 +473,7 @@ resource "helm_release" "fluent_bit" {
   }
 
   depends_on = [
-    aws_eks_node_group.main,
+    null_resource.api_ready, # Wait for K8s API to be reachable
     aws_iam_role_policy_attachment.fluent_bit,
     aws_cloudwatch_log_group.container_logs
   ]
@@ -450,7 +488,8 @@ resource "kubernetes_namespace" "app" {
     }
   }
 
-  depends_on = [aws_eks_node_group.main]
+  # Gate on api_ready: ensures the K8s API is reachable before namespace creation
+  depends_on = [null_resource.api_ready]
 }
 
 # AWS-AUTH ConfigMap - Map IAM User to K8s RBAC
@@ -461,6 +500,18 @@ resource "kubernetes_config_map_v1_data" "aws_auth" {
   }
 
   data = {
+    mapRoles = yamlencode([
+      {
+        rolearn  = aws_iam_role.node_group.arn
+        username = "system:node:{{EC2PrivateDNSName}}"
+        groups   = ["system:bootstrappers", "system:nodes"]
+      },
+      {
+        rolearn  = var.github_actions_role_arn
+        username = "github-actions"
+        groups   = ["system:masters"]
+      }
+    ])
     mapUsers = yamlencode([{
       userarn  = var.dev_user_arn
       username = "bedrock-dev-view"
@@ -470,5 +521,8 @@ resource "kubernetes_config_map_v1_data" "aws_auth" {
 
   force = true
 
-  depends_on = [aws_eks_node_group.main]
+  # Gate on api_ready: the aws-auth ConfigMap write requires a live K8s API.
+  # Depending directly on aws_eks_node_group.main is not sufficient — AWS
+  # marks the node group ACTIVE before the API server accepts connections.
+  depends_on = [null_resource.api_ready]
 }

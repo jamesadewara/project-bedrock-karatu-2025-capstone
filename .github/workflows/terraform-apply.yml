@@ -1,8 +1,3 @@
-# ============================================================
-# GITHUB ACTIONS - Terraform Apply on Merge to Main
-# Automatically applies infrastructure changes after PR merge
-# Uses OIDC for AWS authentication
-# ============================================================
 name: Terraform Apply
 
 on:
@@ -11,20 +6,47 @@ on:
     paths:
       - 'terraform/**'
       - '.github/workflows/terraform-apply.yml'
+      - '!grading.json'
 
 permissions:
-  id-token: write       # Required for OIDC
-  contents: write       # Required to commit grading.json
-  issues: write         # Required to create failure issues
+  id-token: write        # Required for OIDC
+  contents: write        # Required to commit grading.json
+  issues: write          # Required to create failure issues
+  security-events: write # Required for SARIF security upload
 
 env:
   TF_IN_AUTOMATION: true
-  AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
 
 jobs:
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Checkout repository
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Step 2: Run tfsec - Terraform IaC security scanner
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          working_directory: ./terraform
+          soft_fail: true # Report issues but don't block the pipeline
+
+      # Step 3: Run Checkov - Multi-framework IaC scanner
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: terraform
+          framework: terraform
+          soft_fail: true  # Report issues without blocking the pipeline
+          output_format: cli
+
   terraform-apply:
     name: Terraform Apply
     runs-on: ubuntu-latest
+    needs: security-scan  # Security scan MUST run before applying
     defaults:
       run:
         working-directory: ./terraform
@@ -33,53 +55,70 @@ jobs:
       # Step 1: Checkout Code
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }} 
 
       # Step 2: Configure AWS Credentials via OIDC
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          aws-region: us-east-1
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Terraform-Apply
+          role-duration-seconds: 3600 
 
-      # Step 3: Setup Terraform
+      # Step 3: Verify AWS Authentication (debugging)
+      - name: Verify AWS Credentials
+        run: |
+          aws sts get-caller-identity
+          echo "Account: $(aws sts get-caller-identity --query 'Account' --output text)"
+
+      # Step 4: Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.10.0"
+          terraform_wrapper: false # Setting to false ensures standard shell commands execute natively
 
-      # Step 4: Terraform Init
+      # Step 5: Terraform Init
       - name: Terraform Init
         run: terraform init
 
-      # Step 5: Terraform Validate
+      # Step 6: Terraform Validate
       - name: Terraform Validate
         run: terraform validate
 
-      # Step 5: Terraform Apply
-      - name: Terraform Apply
+      # Step 7: Terraform Apply - Phase 1 (Cluster)
+      # Create the cluster first so that the K8s/Helm providers can connect to it
+      - name: Terraform Apply - Phase 1 (Cluster)
+        run: terraform apply -target=module.eks.aws_eks_cluster.main -target=module.eks.aws_eks_node_group.main -auto-approve -input=false
+
+      # Step 8: Terraform Apply - Phase 2 (Everything Else)
+      - name: Terraform Apply - Phase 2 (All)
         id: apply
         run: terraform apply -auto-approve -input=false
 
-      # Step 6: Generate grading.json
+      # Step 8: Generate grading.json (Outputs to root dir with secrets redacted)
       - name: Generate Grading JSON
-        run: terraform output -json > ../grading.json
+        run: |
+          terraform output -json | jq '.dev_user_secret_access_key.value = "[REDACTED]" | .generated_dev_user_password.value = "[REDACTED]"' > ../grading.json
 
-      # Step 7: Configure Git for auto-commit
+      # Step 9: Configure Git
       - name: Configure Git
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
 
-      # Step 8: Commit grading.json back to repo
+      # Step 10: Commit grading.json back to repo (FIXED: targeted path explicitly)
       - name: Commit Grading JSON
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "chore: Update grading.json from Terraform apply [skip ci]"
-          file_pattern: grading.json
+          file_pattern: "grading.json"
+          repository: "." # Force-points to repository root context, skipping default nested directory
           create_branch: false
 
-      # Step 9: Notify on Failure
+      # Step 11: Notify on Failure
       - name: Notify on Failure
         if: failure()
         uses: actions/github-script@v7

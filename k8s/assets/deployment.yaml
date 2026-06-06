@@ -20,7 +20,7 @@ spec:
       serviceAccountName: default
       containers:
       - name: assets
-        image: public.ecr.aws/aws-containers/retail-store-sample-assets:0.6.0
+        image: public.ecr.aws/aws-containers/retail-store-sample-assets:0.8.5
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
@@ -34,13 +34,13 @@ spec:
             cpu: "100m"
         livenessProbe:
           httpGet:
-            path: /health
+            path: /health.html
             port: 8080
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /health
+            path: /health.html
             port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 5
+          initialDelaySeconds: 15
+          periodSeconds: 10

@@ -28,9 +28,9 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = merge(var.common_tags, {
-    Name = "${var.name}-public-${var.availability_zones[count.index]}"
-    Type = "public"
-    "kubernetes.io/role/elb" = "1"
+    Name                                            = "${var.name}-public-${var.availability_zones[count.index]}"
+    Type                                            = "public"
+    "kubernetes.io/role/elb"                        = "1"
     "kubernetes.io/cluster/project-bedrock-cluster" = "shared"
   })
 }
@@ -44,9 +44,9 @@ resource "aws_subnet" "private" {
   availability_zone = var.availability_zones[count.index]
 
   tags = merge(var.common_tags, {
-    Name = "${var.name}-private-${var.availability_zones[count.index]}"
-    Type = "private"
-    "kubernetes.io/role/internal-elb" = "1"
+    Name                                            = "${var.name}-private-${var.availability_zones[count.index]}"
+    Type                                            = "private"
+    "kubernetes.io/role/internal-elb"               = "1"
     "kubernetes.io/cluster/project-bedrock-cluster" = "shared"
   })
 }
@@ -123,64 +123,4 @@ resource "aws_route_table_association" "private" {
 
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id
-}
-
-# VPC Flow Logs (for observability)
-resource "aws_flow_log" "main" {
-  vpc_id                   = aws_vpc.main.id
-  traffic_type             = "ALL"
-  log_destination_type     = "cloud-watch-logs"
-  log_destination          = aws_cloudwatch_log_group.vpc_flow.arn
-  iam_role_arn             = aws_iam_role.vpc_flow_logs.arn
-  max_aggregation_interval = 60
-
-  tags = var.common_tags
-}
-
-resource "aws_cloudwatch_log_group" "vpc_flow" {
-  name              = "/aws/vpc/${var.name}-flow-logs"
-  retention_in_days = 7
-  tags              = var.common_tags
-
-  lifecycle {
-    ignore_changes = [name, retention_in_days]  # Ignore if already exists
-    prevent_destroy = false
-  }
-}
-
-resource "aws_iam_role" "vpc_flow_logs" {
-  name = "${var.name}-vpc-flow-logs-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "vpc-flow-logs.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
-
-  tags = var.common_tags
-}
-
-resource "aws_iam_role_policy" "vpc_flow_logs" {
-  name = "${var.name}-vpc-flow-logs-policy"
-  role = aws_iam_role.vpc_flow_logs.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "logs:CreateLogGroup",
-        "logs:CreateLogStream",
-        "logs:PutLogEvents",
-        "logs:DescribeLogGroups",
-        "logs:DescribeLogStreams"
-      ]
-      Resource = "*"
-    }]
-  })
 }

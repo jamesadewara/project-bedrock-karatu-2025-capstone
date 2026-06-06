@@ -82,7 +82,7 @@ resource "aws_db_instance" "catalog" {
 
   allocated_storage     = 20
   max_allocated_storage = 50
-  storage_type          = "gp2"   # gp2 is cheaper than gp3 for small instances
+  storage_type          = "gp2" # gp2 is cheaper than gp3 for small instances
   storage_encrypted     = true
 
   db_name  = var.db_name_catalog
@@ -93,14 +93,14 @@ resource "aws_db_instance" "catalog" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   parameter_group_name   = aws_db_parameter_group.mysql.name
 
-  publicly_accessible    = false
-  multi_az               = false
-  skip_final_snapshot    = true
-  deletion_protection    = false
+  publicly_accessible     = false
+  multi_az                = false
+  skip_final_snapshot     = true
+  deletion_protection     = false
   backup_retention_period = 1
 
   tags = merge(var.common_tags, {
-    Name = "${var.eks_cluster_name}-catalog-mysql"
+    Name    = "${var.eks_cluster_name}-catalog-mysql"
     Service = "catalog"
   })
 }
@@ -110,7 +110,7 @@ resource "aws_db_instance" "orders" {
 
   engine         = "postgres"
   engine_version = "16.3"
-  instance_class = var.aws_db_instance_orders_instance_class  # FREE TIER ELIGIBLE
+  instance_class = var.aws_db_instance_orders_instance_class # FREE TIER ELIGIBLE
 
   allocated_storage     = 20
   max_allocated_storage = 50
@@ -125,14 +125,14 @@ resource "aws_db_instance" "orders" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   parameter_group_name   = aws_db_parameter_group.postgres.name
 
-  publicly_accessible    = false
-  multi_az               = false
-  skip_final_snapshot    = true
-  deletion_protection    = false
+  publicly_accessible     = false
+  multi_az                = false
+  skip_final_snapshot     = true
+  deletion_protection     = false
   backup_retention_period = 1
 
   tags = merge(var.common_tags, {
-    Name = "${var.eks_cluster_name}-orders-postgres"
+    Name    = "${var.eks_cluster_name}-orders-postgres"
     Service = "orders"
   })
 }
