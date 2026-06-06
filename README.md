@@ -28,13 +28,26 @@ A production-grade Kubernetes deployment on AWS EKS featuring a retail microserv
 
 ## Quick Start
 
-### 1. Provision Infrastructure
+### 1a. Provision Infrastructure
 
 ```bash
 cd terraform
 terraform init
 terraform plan  # Review changes
 terraform apply  # Provision all AWS resources
+```
+
+### 1b. Ensure you have Github OIDC Provider on AWS
+- If you don't have it run the following command:
+```bash
+aws iam create-open-id-connect-provider \
+    --url "https://token.actions.githubusercontent.com" \
+    --client-id-list "sts.amazonaws.com" \
+    --thumbprint-list "6938fd4d98bab03faadb97b34396831e3780aea1"
+```
+- But if you do run this command to list them:
+```bash
+aws iam list-open-id-connect-providers
 ```
 
 ### 2. Configure Kubernetes Access
@@ -80,6 +93,104 @@ kubectl get ingress retail-app -n retail-app -o jsonpath='{.status.loadBalancer.
 | **Assets** | Service | Static asset serving |
 | **RabbitMQ** | Infrastructure | Message broker for async workflows |
 | **Redis** | Infrastructure | In-cluster caching layer |
+
+### Architecture Diagram
+
+```mermaid
+graph TB
+    %% Nodes styling
+    classDef aws fill:#FF9900,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef k8s fill:#326CE5,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef db fill:#3F51B5,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef net fill:#4CAF50,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef serverless fill:#E91E63,stroke:#fff,stroke-width:2px,color:#fff;
+    
+    subgraph AWS_Cloud ["AWS Cloud (us-east-1)"]
+        IGW["Internet Gateway"]:::net
+        ALB["Application Load Balancer (ALB)"]:::net
+        
+        subgraph VPC ["VPC (10.0.0.0/16)"]
+            subgraph AZ_A ["Availability Zone us-east-1a"]
+                PubSub_A["Public Subnet (10.0.1.0/24)"]:::net
+                NatGW_A["NAT Gateway A"]:::net
+                
+                subgraph PrivSub_A ["Private Subnet (10.0.3.0/24)"]
+                    subgraph Node_A ["EKS Node (t3.micro)"]
+                        UI_A["UI Pod"]:::k8s
+                        Catalog_A["Catalog Pod"]:::k8s
+                        Orders_A["Orders Pod"]:::k8s
+                    end
+                end
+            end
+            
+            subgraph AZ_B ["Availability Zone us-east-1b"]
+                PubSub_B["Public Subnet (10.0.2.0/24)"]:::net
+                NatGW_B["NAT Gateway B"]:::net
+                
+                subgraph PrivSub_B ["Private Subnet (10.0.4.0/24)"]
+                    subgraph Node_B ["EKS Node (t3.micro)"]
+                        Carts_B["Carts Pod"]:::k8s
+                        Checkout_B["Checkout Pod"]:::k8s
+                        Assets_B["Assets Pod"]:::k8s
+                        RabbitMQ["RabbitMQ Pod"]:::k8s
+                        Redis["Redis Pod"]:::k8s
+                    end
+                end
+            end
+        end
+        
+        %% Managed Data Layer
+        subgraph Data_Layer ["Managed Data Layer"]
+            RDS_MySQL[("RDS MySQL<br>(Catalog DB)")]:::db
+            RDS_PgSQL[("RDS PostgreSQL<br>(Orders DB)")]:::db
+            DynamoDB[("DynamoDB<br>(Carts Table)")]:::db
+            S3_Assets[("S3 Assets Bucket<br>bedrock-assets-alt-soe-025-3359")]:::db
+        end
+        
+        %% Serverless Integration
+        subgraph Serverless ["Serverless Flow"]
+            Lambda_Proc[["Lambda Processor<br>bedrock-asset-processor"]]:::serverless
+        end
+        
+        %% Monitoring
+        CloudWatch[("CloudWatch Logs")]:::aws
+    end
+
+    %% Ingress & Traffic Routing
+    Client["User / Internet"] --> IGW
+    IGW --> ALB
+    ALB -- "Route Traffic" --> UI_A
+    
+    %% Internal Microservice Communications
+    UI_A --> Catalog_A
+    UI_A --> Orders_A
+    UI_A --> Carts_B
+    UI_A --> Checkout_B
+    UI_A --> Assets_B
+    
+    %% Microservice to Data / Messaging
+    Catalog_A --> RDS_MySQL
+    Orders_A --> RDS_PgSQL
+    Orders_A <--> RabbitMQ
+    Checkout_B <--> RabbitMQ
+    Carts_B -- "IRSA Auth" --> DynamoDB
+    Assets_B -- "Read Assets" --> S3_Assets
+    
+    %% S3 to Lambda Flow
+    Client -- "Upload Images" --> S3_Assets
+    S3_Assets -- "ObjectCreated Event" --> Lambda_Proc
+    Lambda_Proc -- "Log Processing" --> CloudWatch
+    
+    %% EKS Node egress routing
+    NatGW_A --> IGW
+    NatGW_B --> IGW
+    PrivSub_A -.-> NatGW_A
+    PrivSub_B -.-> NatGW_B
+    
+    %% Observability logs flow
+    Node_A -- "FluentBit" --> CloudWatch
+    Node_B -- "FluentBit" --> CloudWatch
+```
 
 ### Data Flow
 
@@ -247,6 +358,13 @@ kubectl exec -it <pod-name> -n retail-app -- \
   mysql -h <db-host> -u <db-user> -p<db-password> -e "SELECT VERSION();"
 ```
 
+### AWS Service Quotas - vCPU Limit
+If pods remain in Pending state with "Too many pods" messages:
+1. Go to [AWS Service Quotas Console](https://console.aws.amazon.com/servicequotas)
+2. Search: "EC2 On-Demand Standard instances"
+3. Request quota increase to 32 vCPUs
+4. After approval, scale node group to desired size
+
 ## Cleanup
 
 To destroy all resources and cleanup:
@@ -259,6 +377,10 @@ kubectl delete -f k8s/
 cd terraform
 terraform destroy
 ```
+
+## AWS Service Quotas - vCPU Limit Increase
+
+The default AWS Free Tier account allows **8 vCPUs** for On-Demand t3/t2 instances. The Project Bedrock infrastructure initially provisions 6 EC2 nodes (t3.small), which already uses 12 vCPUs—exceeding the Free Tier limit by 50%. **To deploy the full application stack, you must request a vCPU Limit Increase** through AWS Service Quotas for **Amazon Elastic Compute Cloud (Amazon EC2)** → **Running On-Demand Standard (A, C, D, H, I, M, R, T, Z) instances**. Request an increase to **32 vCPUs** to allow full cluster scaling. The request typically approves within hours. Once approved, scale the EKS node group: `aws eks update-nodegroup-config --cluster-name project-bedrock-cluster --nodegroup-name project-bedrock-cluster-nodes --scaling-config desiredSize=6,minSize=2,maxSize=15 --region us-east-1`. This enables all application pods to schedule across the cluster.
 
 ## Project Constraints
 

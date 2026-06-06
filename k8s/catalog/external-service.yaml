@@ -1,0 +1,26 @@
+---
+# External service that maps catalog-db DNS name to actual RDS endpoint
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog-db
+  namespace: retail-app
+spec:
+  type: ExternalName
+  externalName: project-bedrock-cluster-catalog.cg9e8o0u8tmi.us-east-1.rds.amazonaws.com
+  ports:
+  - port: 3306
+    protocol: TCP
+---
+# External service for orders database  
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders-db
+  namespace: retail-app
+spec:
+  type: ExternalName
+  externalName: project-bedrock-cluster-orders.cg9e8o0u8tmi.us-east-1.rds.amazonaws.com
+  ports:
+  - port: 5432
+    protocol: TCP

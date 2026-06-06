@@ -20,7 +20,7 @@ spec:
       serviceAccountName: default
       containers:
       - name: checkout
-        image: public.ecr.aws/aws-containers/retail-store-sample-checkout:0.6.0
+        image: public.ecr.aws/aws-containers/retail-store-sample-checkout:1.6.1
         imagePullPolicy: IfNotPresent
         ports:
         - name: http

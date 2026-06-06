@@ -62,7 +62,38 @@ output "dev_user_secret_access_key" {
   sensitive   = true
 }
 
-output "dev_user_console_password" {
+output "generated_dev_user_password" {
   description = "Developer Console Password (if set)"
-  value       = "Use AWS Console password reset or IAM credentials file"
+  value       = aws_iam_user_login_profile.dev_user_profile.password
+  sensitive   = true
+}
+
+output "acm_certificate_arn" {
+  description = "The ARN of the ACM certificate if domain_name is provided"
+  value       = length(aws_acm_certificate.cert) > 0 ? aws_acm_certificate.cert[0].arn : null
+}
+
+output "acm_validation_options" {
+  description = "DNS CNAME validation records to add in Namecheap"
+  value = length(aws_acm_certificate.cert) > 0 ? {
+    for dvo in aws_acm_certificate.cert[0].domain_validation_options : dvo.domain_name => {
+      host   = dvo.resource_record_name
+      target = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+}
+
+output "github_actions_role_arn" {
+  value       = aws_iam_role.github_actions.arn
+  description = "The ARN for the GitHub Actions OIDC role"
+}
+
+# The DNS hostname of the ALB created by the Kubernetes Ingress.
+# Point your Namecheap CNAME record at this value for:
+#   - @ (root domain)  → ALIAS / CNAME to this
+#   - www              → CNAME to this
+output "alb_hostname" {
+  description = "ALB DNS hostname — use as CNAME target in Namecheap for both root and www"
+  value       = var.domain_name != "" ? try(kubernetes_ingress_v1.retail_app[0].status[0].load_balancer[0].ingress[0].hostname, "ALB not yet provisioned — run terraform apply first") : "No domain configured"
 }

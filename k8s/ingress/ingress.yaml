@@ -1,23 +1,67 @@
+# =============================================================================
+# !! THIS FILE IS A REFERENCE ONLY — DO NOT APPLY MANUALLY !!
+#
+# The Kubernetes Ingress is now managed by Terraform in:
+#   terraform/main.tf  →  resource "kubernetes_ingress_v1" "retail_app"
+#
+# Terraform injects the ACM certificate ARN directly from the
+# aws_acm_certificate.cert resource at apply time, making the setup
+# 100% dynamic and zero-copy-paste.
+#
+# To update the Ingress:
+#   1. Edit terraform/main.tf  (kubernetes_ingress_v1.retail_app)
+#   2. Run: terraform apply
+#
+# To see the ALB hostname after apply:
+#   terraform output alb_hostname
+#
+# This file is kept as a documentation reference only.
+# =============================================================================
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: retail-app
   namespace: retail-app
   annotations:
+    # --- ALB Controller ---
     kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/healthcheck-path: /health
+
+    # --- HTTPS / TLS ---
+    # Listen on both HTTP (80) and HTTPS (443)
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    # Redirect all HTTP traffic to HTTPS automatically
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    # ACM certificate ARN — populated dynamically by Terraform at apply time
+    alb.ingress.kubernetes.io/certificate-arn: "<POPULATED_BY_TERRAFORM>"
+
+    # --- Health Check ---
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health
     alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
     alb.ingress.kubernetes.io/success-codes: "200"
 spec:
   rules:
-  - http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: ui
-            port:
-              number: 80
+    # Root domain e.g: spatialdesign3d.site
+    - host: "<VAR:domain_name>"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ui
+                port:
+                  number: 80
+
+    # www subdomain: www.spatialdesign3d.site
+    - host: "www.<VAR:domain_name>"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ui
+                port:
+                  number: 80

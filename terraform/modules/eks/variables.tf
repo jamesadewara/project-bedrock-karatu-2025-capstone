@@ -28,6 +28,17 @@ variable "app_namespace" {
   type        = string
 }
 
+variable "aws_region" {
+  description = "AWS Region"
+  type        = string
+}
+
+variable "eks_public_access_cidrs" {
+  description = "EKS API endpoint public access CIDR blocks (for security: restrict to your IP)"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
 variable "common_tags" {
   description = "Common tags"
   type        = map(string)
@@ -37,7 +48,7 @@ variable "common_tags" {
 variable "aws_eks_node_group_instance_types" {
   description = "EKS Node Group Instance Types"
   type        = list(string)
-  default     = ["t3.micro"] # "t3.micro"
+  default     = ["t3.small"] # "t3.small"
 }
 
 variable "dev_user_arn" {
@@ -57,8 +68,6 @@ variable "db_password" {
   sensitive   = true
 }
 
-
-
 variable "db_name_catalog" {
   description = "Catalog database name"
   type        = string
@@ -66,5 +75,10 @@ variable "db_name_catalog" {
 
 variable "db_name_orders" {
   description = "Orders database name"
+  type        = string
+}
+
+variable "github_actions_role_arn" {
+  description = "IAM ARN of the GitHub Actions role to map in aws-auth"
   type        = string
 }
