@@ -1,0 +1,113 @@
+{
+  "acm_certificate_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:acm:us-east-1:839026370596:certificate/d4f3af56-90dc-4d40-bbd3-18f67a7d1fa0"
+  },
+  "acm_validation_options": {
+    "sensitive": false,
+    "type": [
+      "map",
+      [
+        "object",
+        {
+          "host": "string",
+          "target": "string",
+          "type": "string"
+        }
+      ]
+    ],
+    "value": {
+      "*.spatialdesign3d.site": {
+        "host": "_c1705d84de99d59858171de92e29f074.spatialdesign3d.site.",
+        "target": "_f2010e272918efff4812418b3e2b38e2.jkddzztszm.acm-validations.aws.",
+        "type": "CNAME"
+      },
+      "spatialdesign3d.site": {
+        "host": "_c1705d84de99d59858171de92e29f074.spatialdesign3d.site.",
+        "target": "_f2010e272918efff4812418b3e2b38e2.jkddzztszm.acm-validations.aws.",
+        "type": "CNAME"
+      },
+      "www.spatialdesign3d.site": {
+        "host": "_5013fd7cffbe3fbd22fa062b7e5aff7b.www.spatialdesign3d.site.",
+        "target": "_73550aaaada7b595a049188ac8c61046.jkddzztszm.acm-validations.aws.",
+        "type": "CNAME"
+      }
+    }
+  },
+  "alb_hostname": {
+    "sensitive": false,
+    "type": "string",
+    "value": "k8s-retailap-retailap-96a8cc239a-1590014583.us-east-1.elb.amazonaws.com"
+  },
+  "assets_bucket_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "bedrock-assets-alt-soe-025-3359"
+  },
+  "carts_dynamodb_role_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:iam::839026370596:role/bedrock-carts-dynamodb-role"
+  },
+  "catalog_db_endpoint": {
+    "sensitive": true,
+    "type": "string",
+    "value": "project-bedrock-cluster-catalog.cg9e8o0u8tmi.us-east-1.rds.amazonaws.com"
+  },
+  "cluster_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "https://76AF34B9A5E0940727FC67027DEA003C.gr7.us-east-1.eks.amazonaws.com"
+  },
+  "cluster_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "project-bedrock-cluster"
+  },
+  "dev_user_access_key_id": {
+    "sensitive": true,
+    "type": "string",
+    "value": "AKIA4GWO6NASD7C53WMY"
+  },
+  "dev_user_secret_access_key": {
+    "sensitive": true,
+    "type": "string",
+    "value": "[REDACTED]"
+  },
+  "dynamodb_table_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "bedrock-carts"
+  },
+  "generated_dev_user_password": {
+    "sensitive": true,
+    "type": "string",
+    "value": "[REDACTED]"
+  },
+  "github_actions_role_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:iam::839026370596:role/github-actions-terraform-execution"
+  },
+  "lambda_function_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:lambda:us-east-1:839026370596:function:bedrock-asset-processor"
+  },
+  "orders_db_endpoint": {
+    "sensitive": true,
+    "type": "string",
+    "value": "project-bedrock-cluster-orders.cg9e8o0u8tmi.us-east-1.rds.amazonaws.com"
+  },
+  "region": {
+    "sensitive": false,
+    "type": "string",
+    "value": "us-east-1"
+  },
+  "vpc_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "vpc-0a0404aa22e0ddf38"
+  }
+}
