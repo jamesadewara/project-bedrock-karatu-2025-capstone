@@ -67,9 +67,10 @@ jobs:
         id: apply
         run: terraform apply -auto-approve -input=false
 
-      # Step 8: Generate grading.json (Outputs to root dir)
+      # Step 8: Generate grading.json (Outputs to root dir with secrets redacted)
       - name: Generate Grading JSON
-        run: terraform output -json > ../grading.json
+        run: |
+          terraform output -json | jq '.dev_user_secret_access_key.value = "[REDACTED]" | .generated_dev_user_password.value = "[REDACTED]"' > ../grading.json
 
       # Step 9: Configure Git
       - name: Configure Git
