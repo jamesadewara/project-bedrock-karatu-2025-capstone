@@ -38,3 +38,4 @@ terraform.rc
 
 # Ignore local asset images (downloaded from GitHub, environment-specific)
 /assets-images/
+grading.json
