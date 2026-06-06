@@ -26,8 +26,6 @@ spec:
         - name: http
           containerPort: 8080
         env:
-        - name: MANAGEMENT_ENDPOINTS_WEB_BASE_PATH
-          value: /actuator
         - name: AWS_REGION
           value: "us-east-1"
         - name: CATALOG_API_URL

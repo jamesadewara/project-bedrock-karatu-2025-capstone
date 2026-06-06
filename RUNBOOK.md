@@ -276,6 +276,7 @@ aws logs tail /aws/eks/project-bedrock-cluster/api --follow
 ## Phase 9: Test Serverless Extension (S3-Lambda)
 
 ```bash
+cd terraform
 # Get the actual S3 bucket name (from terraform outputs)
 BUCKET_NAME=$(terraform output -raw assets_bucket_name 2>/dev/null)
 

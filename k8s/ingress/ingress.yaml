@@ -34,7 +34,6 @@ metadata:
     # Redirect all HTTP traffic to HTTPS automatically
     alb.ingress.kubernetes.io/ssl-redirect: "443"
     # ACM certificate ARN — populated dynamically by Terraform at apply time
-    # DO NOT hardcode this value here; Terraform manages it.
     alb.ingress.kubernetes.io/certificate-arn: "<POPULATED_BY_TERRAFORM>"
 
     # --- Health Check ---
@@ -43,7 +42,7 @@ metadata:
     alb.ingress.kubernetes.io/success-codes: "200"
 spec:
   rules:
-    # Root domain: spatialdesign3d.site
+    # Root domain e.g: spatialdesign3d.site
     - host: "<VAR:domain_name>"
       http:
         paths:

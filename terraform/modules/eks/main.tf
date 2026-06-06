@@ -209,6 +209,48 @@ resource "null_resource" "enable_prefix_delegation" {
   ]
 }
 
+# ---------------------------------------------------------------------------
+# API READINESS GATE
+# AWS marks a node group as ACTIVE before the Kubernetes API server is
+# actually reachable. This null_resource actively polls until kubectl can
+# connect, preventing race conditions in all downstream K8s resources.
+# ---------------------------------------------------------------------------
+resource "null_resource" "api_ready" {
+  triggers = {
+    cluster_id = aws_eks_cluster.main.id
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      echo "[api_ready] Updating kubeconfig..."
+      aws eks update-kubeconfig \
+        --name ${aws_eks_cluster.main.name} \
+        --region ${data.aws_region.current.name}
+
+      echo "[api_ready] Waiting for EKS API server to accept connections..."
+      MAX=30
+      COUNT=0
+      until kubectl get nodes --request-timeout=5s > /dev/null 2>&1; do
+        COUNT=$((COUNT + 1))
+        if [ $COUNT -ge $MAX ]; then
+          echo "[api_ready] ERROR: EKS API not reachable after $((MAX * 10))s. Aborting."
+          exit 1
+        fi
+        echo "[api_ready] Attempt $COUNT/$MAX — API not yet ready, retrying in 10s..."
+        sleep 10
+      done
+      echo "[api_ready] EKS API is ready after $((COUNT * 10))s."
+    EOT
+  }
+
+  depends_on = [
+    aws_eks_node_group.main,
+    null_resource.enable_prefix_delegation
+  ]
+}
+
+
 # AWS Load Balancer Controller IAM Role (IRSA)
 resource "aws_iam_role" "alb_controller" {
   name = "${var.cluster_name}-alb-controller-role"
@@ -319,7 +361,7 @@ resource "helm_release" "alb_controller" {
   }
 
   depends_on = [
-    aws_eks_node_group.main,
+    null_resource.api_ready, # Wait for K8s API to be reachable
     aws_iam_role_policy_attachment.alb_controller,
     kubernetes_namespace.app
   ]
@@ -425,7 +467,7 @@ resource "helm_release" "fluent_bit" {
   }
 
   depends_on = [
-    aws_eks_node_group.main,
+    null_resource.api_ready, # Wait for K8s API to be reachable
     aws_iam_role_policy_attachment.fluent_bit,
     aws_cloudwatch_log_group.container_logs
   ]
@@ -440,7 +482,8 @@ resource "kubernetes_namespace" "app" {
     }
   }
 
-  depends_on = [aws_eks_node_group.main]
+  # Gate on api_ready: ensures the K8s API is reachable before namespace creation
+  depends_on = [null_resource.api_ready]
 }
 
 # AWS-AUTH ConfigMap - Map IAM User to K8s RBAC
@@ -460,5 +503,8 @@ resource "kubernetes_config_map_v1_data" "aws_auth" {
 
   force = true
 
-  depends_on = [aws_eks_node_group.main]
+  # Gate on api_ready: the aws-auth ConfigMap write requires a live K8s API.
+  # Depending directly on aws_eks_node_group.main is not sufficient — AWS
+  # marks the node group ACTIVE before the API server accepts connections.
+  depends_on = [null_resource.api_ready]
 }

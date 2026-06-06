@@ -469,12 +469,7 @@ resource "aws_acm_certificate" "cert" {
   tags = { Project = var.project_tag }
 }
 
-# -----------------------------------------------------------------------
 # KUBERNETES INGRESS - HTTPS with ACM Certificate (Terraform-managed)
-# This resource is 100% dynamic: the ACM ARN is referenced directly from
-# the aws_acm_certificate resource above — no hardcoded strings anywhere.
-# Recreated automatically on every `terraform apply`.
-# -----------------------------------------------------------------------
 resource "kubernetes_ingress_v1" "retail_app" {
   count = var.domain_name != "" ? 1 : 0
 
@@ -501,9 +496,7 @@ resource "kubernetes_ingress_v1" "retail_app" {
       # Automatically redirect all HTTP traffic to HTTPS
       "alb.ingress.kubernetes.io/ssl-redirect" = "443"
 
-      # *** THE KEY DYNAMIC LINK ***
-      # Directly references the ACM certificate created above — fully automated,
-      # zero copy-paste. When the cert is replaced, this updates on next apply.
+      # Directly references the ACM certificate created above
       "alb.ingress.kubernetes.io/certificate-arn" = aws_acm_certificate.cert[0].arn
 
       # Health check settings

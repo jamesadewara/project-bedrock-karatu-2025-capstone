@@ -29,13 +29,26 @@ A production-grade Kubernetes deployment on AWS EKS featuring a retail microserv
 
 ## Quick Start
 
-### 1. Provision Infrastructure
+### 1a. Provision Infrastructure
 
 ```bash
 cd terraform
 terraform init
 terraform plan  # Review changes
 terraform apply  # Provision all AWS resources
+```
+
+### 1b. Ensure you have Github OIDC Provider on AWS
+- If you don't have it run the following command:
+```bash
+aws iam create-open-id-connect-provider \
+    --url "https://token.actions.githubusercontent.com" \
+    --client-id-list "sts.amazonaws.com" \
+    --thumbprint-list "6938fd4d98bab03faadb97b34396831e3780aea1"
+```
+- But if you do run this command to list them:
+```bash
+aws iam list-open-id-connect-providers
 ```
 
 ### 2. Configure Kubernetes Access
