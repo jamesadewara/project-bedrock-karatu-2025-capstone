@@ -57,6 +57,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }} 
+          fetch-depth: 0 # Adds full tracking visibility for root-level changes
 
       # Step 2: Configure AWS Credentials via OIDC
       - name: Configure AWS Credentials
@@ -115,6 +116,7 @@ jobs:
         with:
           commit_message: "chore: Update grading.json from Terraform apply [skip ci]"
           file_pattern: "grading.json"
+          add_options: "-A" # Forces git to check the entire workspace for untracked files
           repository: "." # Force-points to repository root context, skipping default nested directory
           create_branch: false
 
