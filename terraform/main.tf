@@ -75,6 +75,17 @@ resource "aws_dynamodb_table" "carts" {
     type = "S"
   }
 
+  attribute {
+    name = "customerId"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name               = "idx_global_customerId"
+    hash_key           = "customerId"
+    projection_type    = "ALL"
+  }
+
   point_in_time_recovery {
     enabled = true
   }
@@ -120,9 +131,13 @@ resource "aws_iam_role_policy" "carts_dynamodb" {
         "dynamodb:UpdateItem",
         "dynamodb:DeleteItem",
         "dynamodb:Query",
-        "dynamodb:Scan"
+        "dynamodb:Scan",
+        "dynamodb:DescribeTable"
       ]
-      Resource = aws_dynamodb_table.carts.arn
+      Resource = [
+        aws_dynamodb_table.carts.arn,
+        "${aws_dynamodb_table.carts.arn}/index/*"
+      ]
     }]
   })
 }
