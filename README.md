@@ -84,4 +84,8 @@ For detailed procedures and issue resolution, refer to the following guides:
 
 **Last Updated:** June 2026  
 **Infrastructure:** Terraform >= 1.5.0  
-**License:** MIT [LICENSE](LICENSE)
+**AWS CLI:** v2.34.63  
+**Helm:** v4.2.0  
+**kubectl:** v1.35.5 (client) / v1.34.7-eks-40737a8 (server)  
+**Kustomize:** v5.7.1  
+**License:** MIT ([LICENSE](LICENSE))
