@@ -78,8 +78,6 @@ Kubernetes UI Service (Port 80)
 For detailed procedures and issue resolution, refer to the following guides:
 1. **[RUNBOOK.md](RUNBOOK.md)** - Comprehensive 12-phase deployment and verification procedures.
 2. **[TROUBLESHOOT.md](TROUBLESHOOT.md)** - Solutions for common issues (Pods crashing, Database connections, ALB health checks).
-3. **[PROJECT_REQUIREMENTS.md](PROJECT_REQUIREMENTS.md)** - Original project specification.
-
 ---
 
 **Last Updated:** June 2026  
