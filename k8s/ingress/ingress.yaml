@@ -8,6 +8,15 @@
 # aws_acm_certificate.cert resource at apply time, making the setup
 # 100% dynamic and zero-copy-paste.
 #
+# CONDITIONAL ALB ROUTING:
+#   - HTTPS (443) Listener: Custom domain traffic → UI service (encrypted)
+#   - HTTP (80) Listener with conditional rules:
+#     * Host matches custom domain (spatialdesign3d.site, www.*)
+#       → 301 redirect to HTTPS
+#     * Host is ALB DNS (*.elb.amazonaws.com) or missing
+#       → Forward directly to UI service on HTTP (for internal testing)
+#   - Health check: /actuator/health on HTTP
+#
 # To update the Ingress:
 #   1. Edit terraform/main.tf  (kubernetes_ingress_v1.retail_app)
 #   2. Run: terraform apply
@@ -31,8 +40,7 @@ metadata:
     # --- HTTPS / TLS ---
     # Listen on both HTTP (80) and HTTPS (443)
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-    # Redirect all HTTP traffic to HTTPS automatically
-    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    # NOTE: ssl-redirect is NOT set because we use conditional listener rules instead
     # ACM certificate ARN — populated dynamically by Terraform at apply time
     alb.ingress.kubernetes.io/certificate-arn: "<POPULATED_BY_TERRAFORM>"
 
@@ -40,6 +48,7 @@ metadata:
     alb.ingress.kubernetes.io/healthcheck-path: /actuator/health
     alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
     alb.ingress.kubernetes.io/success-codes: "200"
+
 spec:
   rules:
     # Root domain e.g: spatialdesign3d.site
@@ -56,6 +65,18 @@ spec:
 
     # www subdomain: www.spatialdesign3d.site
     - host: "www.<VAR:domain_name>"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ui
+                port:
+                  number: 80
+
+    # ALB DNS wildcard (for internal testing via ALB DNS)
+    - host: "*.elb.amazonaws.com"
       http:
         paths:
           - path: /

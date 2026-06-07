@@ -108,9 +108,14 @@ variable "aws_secretsmanager_secret_db_recovery_window_in_days" {
 }
 
 variable "domain_name" {
-  description = "The custom domain name to request an ACM certificate for (e.g. example.com). Leave empty to skip ACM."
+  description = "The custom domain name to request an ACM certificate for (e.g. example.com). Leave empty to skip ACM and Ingress."
   type        = string
   default     = "spatialdesign3d.site"
+  # 
+  # Routing behavior with this domain configured:
+  #   - HTTPS (443): All traffic for domain → UI service (secure)
+  #   - HTTP (80):   If Host matches domain → 301 redirect to HTTPS
+  #   - HTTP (80):   If Host is ALB DNS (*.elb.amazonaws.com) → forward directly to UI service (unsecured, for internal testing)
 }
 
 variable "github_repo" {

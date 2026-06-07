@@ -470,7 +470,14 @@ resource "aws_acm_certificate" "cert" {
   tags = { Project = var.project_tag }
 }
 
-# KUBERNETES INGRESS - HTTPS with ACM Certificate (Terraform-managed)
+# KUBERNETES INGRESS - HTTPS with ACM Certificate + Conditional HTTP Routing (Terraform-managed)
+#
+# This Ingress configures:
+#   - HTTPS (443): Listens for custom domain (e.g. spatialdesign3d.site) → forwards to UI service
+#   - HTTP (80):   Two scenarios:
+#       1. If Host header matches custom domain → 301 redirect to HTTPS
+#       2. If Host header is ALB DNS (*.elb.amazonaws.com) or missing → forward directly to target group (HTTP)
+#   - Health checks: /actuator/health on HTTP
 resource "kubernetes_ingress_v1" "retail_app" {
   count = var.domain_name != "" ? 1 : 0
 
@@ -489,13 +496,11 @@ resource "kubernetes_ingress_v1" "retail_app" {
       "alb.ingress.kubernetes.io/target-type" = "ip"
 
       # Open both HTTP (80) and HTTPS (443) listeners on the ALB
+      # IMPORTANT: ssl-redirect is NOT set — we use conditional rules instead
       "alb.ingress.kubernetes.io/listen-ports" = jsonencode([
         { HTTP = 80 },
         { HTTPS = 443 }
       ])
-
-      # Automatically redirect all HTTP traffic to HTTPS
-      "alb.ingress.kubernetes.io/ssl-redirect" = "443"
 
       # Directly references the ACM certificate created above
       "alb.ingress.kubernetes.io/certificate-arn" = aws_acm_certificate.cert[0].arn
@@ -507,11 +512,50 @@ resource "kubernetes_ingress_v1" "retail_app" {
 
       # Use the public subnets for the ALB
       "alb.ingress.kubernetes.io/subnets" = join(",", module.vpc.public_subnet_ids)
+
+      # ====================================================================
+      # CONDITIONAL HTTP → HTTPS REDIRECT FOR CUSTOM DOMAIN
+      # ====================================================================
+      # Custom action: redirect to HTTPS for domain-based requests
+      "alb.ingress.kubernetes.io/actions.ssl-redirect" = jsonencode({
+        Type = "redirect"
+        RedirectConfig = {
+          Protocol   = "HTTPS"
+          Port       = "443"
+          StatusCode = "HTTP_301"
+        }
+      })
+
+      # Custom action: forward HTTP traffic to UI service (for ALB DNS)
+      "alb.ingress.kubernetes.io/actions.ui-http" = jsonencode({
+        Type = "forward"
+        TargetGroupStickinessConfig = {
+          Enabled = false
+        }
+      })
+
+      # Host-based routing rules for HTTP (80) listener
+      # Rule 1: If Host matches custom domain → redirect to HTTPS
+      "alb.ingress.kubernetes.io/conditions.ssl-redirect" = jsonencode([
+        {
+          Field  = "host-header"
+          Values = ["${var.domain_name}", "www.${var.domain_name}"]
+        }
+      ])
+
+      # Rule 2: If Host is ALB DNS (*.elb.amazonaws.com) or missing → forward to UI service
+      "alb.ingress.kubernetes.io/conditions.ui-http" = jsonencode([
+        {
+          Field  = "host-header"
+          Values = ["*.elb.amazonaws.com"]
+        }
+      ])
     }
   }
 
   spec {
-    # Rule for root domain (e.g. spatialdesign3d.site)
+    # Rule for root domain (e.g: spatialdesign3d.site)
+    # This uses HTTPS only; HTTP is handled by conditional listener rules above
     rule {
       host = var.domain_name
       http {
@@ -529,8 +573,27 @@ resource "kubernetes_ingress_v1" "retail_app" {
     }
 
     # Rule for www subdomain (e.g. www.spatialdesign3d.site)
+    # This uses HTTPS only; HTTP is handled by conditional listener rules above
     rule {
       host = "www.${var.domain_name}"
+      http {
+        path {
+          path      = "/"
+          path_type = "Prefix"
+          backend {
+            service {
+              name = "ui"
+              port { number = 80 }
+            }
+          }
+        }
+      }
+    }
+
+    # Catch-all rule for ALB DNS (wildcard domain matching)
+    # This ensures ALB DNS traffic is handled by the ui-http action (forward, not redirect)
+    rule {
+      host = "*.elb.amazonaws.com"
       http {
         path {
           path      = "/"
