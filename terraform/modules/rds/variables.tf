@@ -8,6 +8,11 @@ variable "private_subnet_ids" {
   type        = list(string)
 }
 
+variable "cluster_security_group_id" {
+  description = "EKS Cluster Security Group ID"
+  type        = string
+}
+
 variable "eks_security_group_id" {
   description = "EKS Node Security Group ID"
   type        = string

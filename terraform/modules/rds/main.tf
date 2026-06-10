@@ -18,7 +18,7 @@ resource "aws_security_group" "rds" {
     from_port       = 3306
     to_port         = 3306
     protocol        = "tcp"
-    security_groups = [var.eks_security_group_id]
+    security_groups = [var.eks_security_group_id, var.cluster_security_group_id]
     description     = "MySQL from EKS nodes"
   }
 
@@ -26,7 +26,7 @@ resource "aws_security_group" "rds" {
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
-    security_groups = [var.eks_security_group_id]
+    security_groups = [var.eks_security_group_id, var.cluster_security_group_id]
     description     = "PostgreSQL from EKS nodes"
   }
 

@@ -26,30 +26,25 @@ spec:
         - name: http
           containerPort: 8080
         env:
-        - name: DB_HOST
-          valueFrom:
-            secretKeyRef:
-              name: catalog-db-credentials
-              key: host
-        - name: DB_PORT
-          value: "3306"
-        - name: DB_USER
+        - name: RETAIL_CATALOG_PERSISTENCE_PROVIDER
+          value: mysql
+        - name: RETAIL_CATALOG_PERSISTENCE_ENDPOINT
+          value: catalog-db:3306
+        - name: RETAIL_CATALOG_PERSISTENCE_USER
           valueFrom:
             secretKeyRef:
               name: catalog-db-credentials
               key: username
-        - name: DB_PASSWORD
+        - name: RETAIL_CATALOG_PERSISTENCE_PASSWORD
           valueFrom:
             secretKeyRef:
               name: catalog-db-credentials
               key: password
-        - name: DB_NAME
+        - name: RETAIL_CATALOG_PERSISTENCE_DB_NAME
           valueFrom:
             secretKeyRef:
               name: catalog-db-credentials
               key: dbname
-        - name: DB_MIGRATION_DISABLE
-          value: "false"
         resources:
           requests:
             memory: "128Mi"
