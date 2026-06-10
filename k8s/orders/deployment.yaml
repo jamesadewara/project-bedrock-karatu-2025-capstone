@@ -26,35 +26,41 @@ spec:
         - name: http
           containerPort: 8080
         env:
-        - name: SPRING_DATASOURCE_WRITER_URL
+        - name: RETAIL_ORDERS_PERSISTENCE_PROVIDER
+          value: postgres
+        - name: RETAIL_ORDERS_PERSISTENCE_ENDPOINT
           valueFrom:
-            secretKeyRef:
-              name: orders-db-credentials
-              key: jdbc_url
-        - name: SPRING_DATASOURCE_WRITER_USERNAME
+            configMapKeyRef:
+              name: retail-app-config
+              key: RETAIL_ORDERS_PERSISTENCE_ENDPOINT
+        - name: RETAIL_ORDERS_PERSISTENCE_USERNAME
           valueFrom:
             secretKeyRef:
               name: orders-db-credentials
               key: username
-        - name: SPRING_DATASOURCE_WRITER_PASSWORD
+        - name: RETAIL_ORDERS_PERSISTENCE_PASSWORD
           valueFrom:
             secretKeyRef:
               name: orders-db-credentials
               key: password
-        - name: SPRING_DATASOURCE_READER_URL
+        - name: RETAIL_ORDERS_PERSISTENCE_NAME
           valueFrom:
             secretKeyRef:
               name: orders-db-credentials
-              key: jdbc_url
-        - name: SPRING_DATASOURCE_READER_USERNAME
+              key: dbname
+        - name: RETAIL_ORDERS_MESSAGING_PROVIDER
+          value: rabbitmq
+        - name: RETAIL_ORDERS_MESSAGING_RABBITMQ_ADDRESSES
+          value: rabbitmq:5672
+        - name: RETAIL_ORDERS_MESSAGING_RABBITMQ_USERNAME
           valueFrom:
             secretKeyRef:
-              name: orders-db-credentials
+              name: rabbitmq-credentials
               key: username
-        - name: SPRING_DATASOURCE_READER_PASSWORD
+        - name: RETAIL_ORDERS_MESSAGING_RABBITMQ_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: orders-db-credentials
+              name: rabbitmq-credentials
               key: password
         resources:
           requests:

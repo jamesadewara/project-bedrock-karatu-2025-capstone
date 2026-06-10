@@ -52,7 +52,8 @@ module "rds" {
 
   vpc_id                = module.vpc.vpc_id
   private_subnet_ids    = module.vpc.private_subnet_ids
-  eks_security_group_id = module.eks.node_security_group_id
+  eks_security_group_id     = module.eks.node_security_group_id
+  cluster_security_group_id = module.eks.cluster_security_group_id
   eks_cluster_name      = var.cluster_name
   db_username           = var.db_username
   db_password           = random_string.db_password.result
@@ -72,6 +73,17 @@ resource "aws_dynamodb_table" "carts" {
   attribute {
     name = "id"
     type = "S"
+  }
+
+  attribute {
+    name = "customerId"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name               = "idx_global_customerId"
+    hash_key           = "customerId"
+    projection_type    = "ALL"
   }
 
   point_in_time_recovery {
@@ -119,9 +131,13 @@ resource "aws_iam_role_policy" "carts_dynamodb" {
         "dynamodb:UpdateItem",
         "dynamodb:DeleteItem",
         "dynamodb:Query",
-        "dynamodb:Scan"
+        "dynamodb:Scan",
+        "dynamodb:DescribeTable"
       ]
-      Resource = aws_dynamodb_table.carts.arn
+      Resource = [
+        aws_dynamodb_table.carts.arn,
+        "${aws_dynamodb_table.carts.arn}/index/*"
+      ]
     }]
   })
 }

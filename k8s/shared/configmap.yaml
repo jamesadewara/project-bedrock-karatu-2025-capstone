@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: retail-app-config
+  namespace: retail-app
+data:
+  # ── Global ────────────────────────────────────────────────────────────────
+  AWS_REGION: "us-east-1"
+
+  # ── Catalog (RDS MySQL via ExternalName service: catalog-db) ──────────────
+  RETAIL_CATALOG_PERSISTENCE_ENDPOINT: "catalog-db:3306"
+
+  # ── Orders (RDS PostgreSQL via ExternalName service: orders-db) ───────────
+  RETAIL_ORDERS_PERSISTENCE_ENDPOINT: "orders-db:5432"
+
+  # ── Carts (AWS DynamoDB — IRSA handles auth) ──────────────────────────────
+  RETAIL_CART_PERSISTENCE_DYNAMODB_TABLE_NAME: "bedrock-carts"
+
+  # ── In-cluster Message Broker ─────────────────────────────────────────────
+  RABBITMQ_HOST: "rabbitmq"
+  RABBITMQ_PORT: "5672"
+
+  # ── In-cluster Cache ──────────────────────────────────────────────────────
+  RETAIL_CHECKOUT_PERSISTENCE_REDIS_URL: "redis://redis:6379"
+
+  # ── UI → Backend service endpoints (short names, port 80) ────────────────
+  RETAIL_UI_ENDPOINTS_CATALOG:  "http://catalog"
+  RETAIL_UI_ENDPOINTS_ORDERS:   "http://orders"
+  RETAIL_UI_ENDPOINTS_CARTS:    "http://carts"
+  RETAIL_UI_ENDPOINTS_CHECKOUT: "http://checkout"
+  RETAIL_UI_ENDPOINTS_ASSETS:   "http://assets"
+
+  # ── Checkout → Orders endpoint ────────────────────────────────────────────
+  RETAIL_CHECKOUT_ENDPOINTS_ORDERS: "http://orders"

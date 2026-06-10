@@ -118,7 +118,7 @@ cd $(git rev-parse --show-toplevel) 2>/dev/null || cd ..
 
 # Deploy all application manifests recursively
 kubectl apply -R -f k8s/
-
+kubectl rollout restart deployment -n retail-app
 echo "✓ Application resources deployed"
 
 # Verify deployment status (do this first to see actual status)
