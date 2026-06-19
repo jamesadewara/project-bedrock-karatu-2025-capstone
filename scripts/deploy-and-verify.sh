@@ -5,7 +5,7 @@
 # Target: retail-app namespace on project-bedrock-cluster (EKS 1.34.8)
 
 set -e
-
+ 
 cd /home/WORKSPACE/project-bedrock-karatu-2025-capstone
 
 echo "╔════════════════════════════════════════════════════════════════════════════╗"
