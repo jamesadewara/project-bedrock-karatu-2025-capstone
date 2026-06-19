@@ -2,7 +2,7 @@
 
 # Retail Store Sample App - Complete Deployment & Patch Application Script
 # Purpose: Apply all corrected Kubernetes manifests and trigger pod restarts
-# Target: retail-app namespace on project-bedrock-cluster (EKS 1.34.8)
+# Target: retail-app namespace on project-bedrock-cluster (EKS 1.34.8
 
 set -e
  
