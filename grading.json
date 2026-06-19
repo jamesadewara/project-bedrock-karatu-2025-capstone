@@ -2,7 +2,7 @@
   "acm_certificate_arn": {
     "sensitive": false,
     "type": "string",
-    "value": "arn:aws:acm:us-east-1:839026370596:certificate/07ff0c11-6c36-45c9-87e3-3529af376193"
+    "value": "arn:aws:acm:us-east-1:839026370596:certificate/fa925bf1-963f-4abe-a423-4bc2aa2a6507"
   },
   "acm_validation_options": {
     "sensitive": false,
@@ -38,7 +38,7 @@
   "alb_hostname": {
     "sensitive": false,
     "type": "string",
-    "value": "k8s-retailap-retailap-96a8cc239a-717867285.us-east-1.elb.amazonaws.com"
+    "value": "k8s-retailap-retailap-96a8cc239a-212794616.us-east-1.elb.amazonaws.com"
   },
   "assets_bucket_name": {
     "sensitive": false,
@@ -58,7 +58,7 @@
   "cluster_endpoint": {
     "sensitive": false,
     "type": "string",
-    "value": "https://2F2BC89BDD128B8477A295E74E7BE576.gr7.us-east-1.eks.amazonaws.com"
+    "value": "https://FB15094FA2B865574691F643734A5C5D.gr7.us-east-1.eks.amazonaws.com"
   },
   "cluster_name": {
     "sensitive": false,
@@ -68,7 +68,7 @@
   "dev_user_access_key_id": {
     "sensitive": true,
     "type": "string",
-    "value": "AKIA4GWO6NASNMNRVFYD"
+    "value": "AKIA4GWO6NASB65RAWPS"
   },
   "dev_user_secret_access_key": {
     "sensitive": true,
@@ -108,6 +108,6 @@
   "vpc_id": {
     "sensitive": false,
     "type": "string",
-    "value": "vpc-02a171e815d8d871e"
+    "value": "vpc-0f4b5778ba9b190d0"
   }
 }
