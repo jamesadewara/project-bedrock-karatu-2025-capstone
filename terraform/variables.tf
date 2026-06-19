@@ -123,3 +123,5 @@ variable "github_repo" {
   type        = string
   default     = "jamesadewara/project-bedrock-karatu-2025-capstone"
 }
+
+# Triggering pipeline run
