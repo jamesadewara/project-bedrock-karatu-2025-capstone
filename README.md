@@ -17,7 +17,7 @@ A production-grade Kubernetes deployment on AWS EKS featuring a retail microserv
 ## Quick Start
 
 The infrastructure is fully automated via GitHub Actions.
-
+  
 ### 1. Provision Infrastructure
 Simply push your changes to the `main` or `staging` branch. The GitHub Actions pipeline will:
 1. Run security scans (tfsec & Checkov).
